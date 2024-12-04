@@ -1,6 +1,3 @@
-//! Blinks the LED on a Pico board
-//!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
 
@@ -9,7 +6,6 @@ use bme680::{Bme680, FieldData, FieldDataCondition, I2CAddress, IIRFilterSize, O
 use bsp::entry;
 use defmt_rtt as _;
 use embedded_hal::digital::OutputPin;
-use embedded_hal::i2c::{I2c, Operation};
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -24,18 +20,20 @@ use bsp::hal::{
 };
 use cortex_m::delay::Delay;
 use heapless::String;
+use i2c_pio::I2C;
 use lcd1602_driver::command::{DataWidth, State};
 use lcd1602_driver::lcd;
 use lcd1602_driver::lcd::{Basic, Ext, Lcd};
 use lcd1602_driver::sender::ParallelSender;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
-use rp_pico::hal::gpio::{Function, Pin};
-use rp_pico::hal::pio::PIOExt;
-use rp_pico::pac::io_bank0::GPIO;
+use rp_pico::hal::gpio::{DynPinId, FunctionI2C, FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
+use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6, Gpio8, Gpio9};
+use rp_pico::hal::pio::{PIOExt, SM0};
+use rp_pico::pac::PIO0;
 use ufmt::uwrite;
 
-static mut SENDER: Option<ParallelSender<Pin<Output, Dynamic>, Pin<OpenDrain, Dynamic>, Pin<Output, Dynamic>, 4>> = None;
+static mut SENDER: Option<ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>> = None;
 static mut DELAY: Option<Delay> = None;
 const FIRE: &str = "Fire Present";
 
@@ -78,7 +76,7 @@ fn main() -> ! {
 
     let mut delay = Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    let mut i2c_pio = i2c_pio::I2C::new(
+    let i2c_pio = I2C::new(
         &mut pio,
         pins.gpio8,
         pins.gpio9,
@@ -103,16 +101,17 @@ fn main() -> ! {
     bme.set_sensor_mode(&mut delay, PowerMode::ForcedMode).unwrap();
 
     // Set up LCD1602
+
     unsafe {
         // TODO Fix this
-        SENDER = Some(ParallelSender::<Pin<Gpio0, Function<Output>>, Pin<Gpio21, Function<OpenDrain>>, Pin<Gpio1, Function<Output>>, 4>::new_4pin(
-            pins.gpio0.into_function(),
-            pins.gpio21.into_function(),
-            pins.gpio1.into_function(),
-            pins.gpio2.into_function(),
-            pins.gpio3.into_function(),
-            pins.gpio4.into_function(),
-            pins.gpio5.into_function(),
+        SENDER = Some(ParallelSender::<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>::new_4pin(
+            pins.gpio0.into_function().into_dyn_pin(),
+            pins.gpio21.into_function().into_dyn_pin(),
+            pins.gpio1.into_function().into_dyn_pin(),
+            pins.gpio2.into_function().into_dyn_pin(),
+            pins.gpio3.into_function().into_dyn_pin(),
+            pins.gpio4.into_function().into_dyn_pin(),
+            pins.gpio5.into_function().into_dyn_pin(),
             None,
         ));
 
@@ -615,7 +614,7 @@ fn main() -> ! {
 /// param delayer: BME sensor delay
 /// param alarm: Buzzer Pin
 /// returns FieldData
-fn get_bme_data(bme: &mut Bme680<i2c_pio, Delay>, delayer: &mut Delay, alarm: &mut Pin<Output, PB1>) -> FieldData {
+fn get_bme_data(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionI2C, PullDown>, Pin<Gpio9, FunctionI2C, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) -> FieldData {
     prep_bme(bme, delayer, alarm);
     bme.get_sensor_data(delayer).unwrap_or((FieldData::default(), FieldDataCondition::Unchanged)).0
 }
@@ -644,7 +643,7 @@ fn get_pressure(data: &FieldData) -> u16 {
 /// param bme: BME sensor reference
 /// param delayer: BME delay
 /// param alarm: Buzzer Pin
-fn prep_bme(bme: &mut Bme680<I2c, Delay>, delayer: &mut Delay, alarm: &mut Pin<Output, PB1>) {
+fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionI2C, PullDown>, Pin<Gpio9, FunctionI2C, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) {
     if bme.set_sensor_mode(delayer, PowerMode::ForcedMode).is_err() {
         loop {
             alarm.set_high();
@@ -660,7 +659,7 @@ fn prep_bme(bme: &mut Bme680<I2c, Delay>, delayer: &mut Delay, alarm: &mut Pin<O
 /// param line: text to render
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
-fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<Output>, Pin<OpenDrain>, Pin<Output>, 4>, Delay<>>) {
+fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
     // Set cursor to the correct line
     if top_line {
         // Reset screen
@@ -676,7 +675,7 @@ fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd<'static, 'static, Par
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<Output>, Pin<OpenDrain>, Pin<Output>, 4>, Delay<>>) {
+fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
     // Clear
     lcd.clean_display();
 
@@ -696,7 +695,7 @@ fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: 
 /// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
 /// param line: The date line
 /// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<Output>, Pin<OpenDrain>, Pin<Output>, 4>, Delay<>>) {
+fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
     // Clear
     lcd.clean_display();
 
@@ -723,7 +722,7 @@ enum RefreshAction {
 /// param wait_time: The amount of time between sensor polling
 /// param preferences: Client Preferences
 /// returns: if the LCD needs an update
-fn should_update(up: &Pin<Input<PullUp>, GPIO>, down: &Pin<Input<PullUp>, GPIO1>, select: &Pin<Input<PullUp>, GPIO2>, wait_time: &mut u16, preferences: &mut Preferences) -> (bool, RefreshAction) {
+fn should_update(up: &Pin<Gpio10, FunctionSio<SioInput>, PullUp>, down: &Pin<Gpio11, FunctionSio<SioInput>, PullUp>, select: &Pin<Gpio12, FunctionSio<SioInput>, PullUp>, wait_time: &mut u16, preferences: &mut Preferences) -> (bool, RefreshAction) {
     *wait_time += 1;
     // Make sure time is kept track of
     if *wait_time % 100 == 0 {
