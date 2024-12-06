@@ -1,13 +1,19 @@
 #![no_std]
 #![no_main]
 
-use embedded_hal::digital::InputPin;
-use core::time::Duration;
-use bme680::{Bme680, FieldData, FieldDataCondition, I2CAddress, IIRFilterSize, OversamplingSetting, PowerMode, SettingsBuilder};
+use bme680::{
+    Bme680, FieldData, FieldDataCondition, I2CAddress, IIRFilterSize, OversamplingSetting,
+    PowerMode, SettingsBuilder,
+};
 use bsp::entry;
+use core::time::Duration;
 use defmt_rtt as _;
+use embedded_hal::delay::DelayNs;
+use embedded_hal::digital::InputPin;
 use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::StatefulOutputPin;
 use panic_probe as _;
+use rp_pico::hal::Timer;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
@@ -19,14 +25,15 @@ use bsp::hal::{
     pac,
     watchdog::Watchdog,
 };
-use cortex_m::delay::Delay;
 use heapless::String;
 use i2c_pio::I2C;
 use lcd1602_rs::LCD1602;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
+use rp_pico::hal::gpio::bank0::{
+    Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5, Gpio6, Gpio8, Gpio9,
+};
 use rp_pico::hal::gpio::{FunctionNull, FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
-use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5, Gpio6, Gpio8, Gpio9};
 use rp_pico::hal::pio::{PIOExt, SM0};
 use rp_pico::pac::PIO0;
 use ufmt::uwrite;
@@ -37,7 +44,7 @@ const FIRE: &str = "Fire Present";
 fn main() -> ! {
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
+    let _core = pac::CorePeripherals::take().unwrap();
 
     // Set up the watchdog driver - needed by the clock setup code
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
@@ -54,8 +61,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-        .ok()
-        .unwrap();
+    .ok()
+    .unwrap();
 
     // The single-cycle I/O block controls our GPIO pins
     let sio = hal::Sio::new(pac.SIO);
@@ -70,7 +77,7 @@ fn main() -> ! {
 
     let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
-    let mut delay = Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let mut delay = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     let i2c_pio = I2C::new(
         &mut pio,
@@ -94,7 +101,8 @@ fn main() -> ! {
 
     bme.set_sensor_settings(&mut delay, settings).unwrap();
 
-    bme.set_sensor_mode(&mut delay, PowerMode::ForcedMode).unwrap();
+    bme.set_sensor_mode(&mut delay, PowerMode::ForcedMode)
+        .unwrap();
 
     // Set up LCD1602
     let mut lcd = LCD1602::new(
@@ -105,7 +113,8 @@ fn main() -> ! {
         pins.gpio4.into_function(),
         pins.gpio5.into_function(),
         delay,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Set up button up
     let mut up_button = pins.gpio10.into_pull_up_input();
@@ -141,7 +150,13 @@ fn main() -> ! {
         // Tick buttons
         button_cooldown = tick_buttons(button_cooldown);
 
-        let (update_needed, action) = should_update(&mut up_button, &mut down_button, &mut select_button, &mut wait_time, &mut preferences);
+        let (update_needed, action) = should_update(
+            &mut up_button,
+            &mut down_button,
+            &mut select_button,
+            &mut wait_time,
+            &mut preferences,
+        );
 
         if update_needed {
             match action {
@@ -171,7 +186,13 @@ fn main() -> ! {
                                 for _ in 0..2 {
                                     loop {
                                         if refresh {
-                                            uwrite!(&mut info_str, "{} - {}", preferences.temperature.0, preferences.temperature.1).unwrap(); // Max str size 7
+                                            uwrite!(
+                                                &mut info_str,
+                                                "{} - {}",
+                                                preferences.temperature.0,
+                                                preferences.temperature.1
+                                            )
+                                            .unwrap(); // Max str size 7
                                             render_edit_screen(&info_str, editing_lower, &mut lcd);
                                             refresh = false;
                                         }
@@ -226,7 +247,13 @@ fn main() -> ! {
                                 for _ in 0..2 {
                                     loop {
                                         if refresh {
-                                            uwrite!(&mut info_str, "{}% - {}%", preferences.humidity.0, preferences.humidity.1).unwrap(); // Max str size 11
+                                            uwrite!(
+                                                &mut info_str,
+                                                "{}% - {}%",
+                                                preferences.humidity.0,
+                                                preferences.humidity.1
+                                            )
+                                            .unwrap(); // Max str size 11
                                             render_edit_screen(&info_str, editing_lower, &mut lcd);
                                             refresh = false;
                                         }
@@ -274,14 +301,15 @@ fn main() -> ! {
                                     preferences.humidity.0 = preferences.humidity.1;
                                     preferences.humidity.1 = temp;
                                 }
-                            },
+                            }
                             3 => {
                                 // Date
 
                                 // Minute
                                 loop {
                                     if refresh {
-                                        uwrite!(&mut info_str, "Minute: {}", preferences.date.1).unwrap(); // Max str size 10
+                                        uwrite!(&mut info_str, "Minute: {}", preferences.date.1)
+                                            .unwrap(); // Max str size 10
                                         render_date_edit_screen(&info_str, &mut lcd);
                                         refresh = false;
                                     }
@@ -308,7 +336,8 @@ fn main() -> ! {
                                 // Hour
                                 loop {
                                     if refresh {
-                                        uwrite!(&mut info_str, "Hour: {}", preferences.date.2).unwrap(); // Max str size 8
+                                        uwrite!(&mut info_str, "Hour: {}", preferences.date.2)
+                                            .unwrap(); // Max str size 8
                                         render_date_edit_screen(&info_str, &mut lcd);
                                         refresh = false;
                                     }
@@ -334,7 +363,8 @@ fn main() -> ! {
                                 // Day
                                 loop {
                                     if refresh {
-                                        uwrite!(&mut info_str, "Day: {}", preferences.date.3).unwrap(); // Max str size 7
+                                        uwrite!(&mut info_str, "Day: {}", preferences.date.3)
+                                            .unwrap(); // Max str size 7
                                         render_date_edit_screen(&info_str, &mut lcd);
                                         refresh = false;
                                     }
@@ -362,7 +392,8 @@ fn main() -> ! {
                                 // TODO But I couldn't care less :)
                                 loop {
                                     if refresh {
-                                        uwrite!(&mut info_str, "Month: {}", preferences.date.4).unwrap(); // Max str size 9
+                                        uwrite!(&mut info_str, "Month: {}", preferences.date.4)
+                                            .unwrap(); // Max str size 9
                                         render_date_edit_screen(&info_str, &mut lcd);
                                         refresh = false;
                                     }
@@ -388,7 +419,8 @@ fn main() -> ! {
                                 // Year
                                 loop {
                                     if refresh {
-                                        uwrite!(&mut info_str, "Year: {}", preferences.date.5).unwrap(); // Max str size 10
+                                        uwrite!(&mut info_str, "Year: {}", preferences.date.5)
+                                            .unwrap(); // Max str size 10
                                         render_date_edit_screen(&info_str, &mut lcd);
                                         refresh = false;
                                     }
@@ -422,7 +454,11 @@ fn main() -> ! {
                                 for index in 0..4 {
                                     loop {
                                         if refresh {
-                                            render_edit_screen(&preferences.format_watering_time(), index < 2, &mut lcd);
+                                            render_edit_screen(
+                                                &preferences.format_watering_time(),
+                                                index < 2,
+                                                &mut lcd,
+                                            );
                                             refresh = false;
                                         }
 
@@ -433,7 +469,9 @@ fn main() -> ! {
                                         }
                                         update_date = !update_date;
 
-                                        if up_button.is_high().unwrap() && down_button.is_high().unwrap() {
+                                        if up_button.is_high().unwrap()
+                                            && down_button.is_high().unwrap()
+                                        {
                                             remove = true;
                                             break;
                                         }
@@ -444,16 +482,24 @@ fn main() -> ! {
                                             } else {
                                                 match index {
                                                     0 => {
-                                                        preferences.watering.unwrap().1 = (preferences.watering.unwrap().1 + 1) % 24;
+                                                        preferences.watering.unwrap().1 =
+                                                            (preferences.watering.unwrap().1 + 1)
+                                                                % 24;
                                                     }
                                                     1 => {
-                                                        preferences.watering.unwrap().0 = (preferences.watering.unwrap().0 + 1) % 60;
+                                                        preferences.watering.unwrap().0 =
+                                                            (preferences.watering.unwrap().0 + 1)
+                                                                % 60;
                                                     }
                                                     2 => {
-                                                        preferences.watering.unwrap().3 = (preferences.watering.unwrap().3 + 1) % 24;
+                                                        preferences.watering.unwrap().3 =
+                                                            (preferences.watering.unwrap().3 + 1)
+                                                                % 24;
                                                     }
                                                     3 => {
-                                                        preferences.watering.unwrap().2 = (preferences.watering.unwrap().2 + 1) % 60;
+                                                        preferences.watering.unwrap().2 =
+                                                            (preferences.watering.unwrap().2 + 1)
+                                                                % 60;
                                                     }
                                                     _ => {}
                                                 }
@@ -465,16 +511,24 @@ fn main() -> ! {
                                             } else {
                                                 match index {
                                                     0 => {
-                                                        preferences.watering.unwrap().1 = (preferences.watering.unwrap().1 + 23) % 24;
+                                                        preferences.watering.unwrap().1 =
+                                                            (preferences.watering.unwrap().1 + 23)
+                                                                % 24;
                                                     }
                                                     1 => {
-                                                        preferences.watering.unwrap().0 = (preferences.watering.unwrap().0 + 59) % 60;
+                                                        preferences.watering.unwrap().0 =
+                                                            (preferences.watering.unwrap().0 + 59)
+                                                                % 60;
                                                     }
                                                     2 => {
-                                                        preferences.watering.unwrap().3 = (preferences.watering.unwrap().3 + 23) % 24;
+                                                        preferences.watering.unwrap().3 =
+                                                            (preferences.watering.unwrap().3 + 23)
+                                                                % 24;
                                                     }
                                                     3 => {
-                                                        preferences.watering.unwrap().2 = (preferences.watering.unwrap().2 + 59) % 60;
+                                                        preferences.watering.unwrap().2 =
+                                                            (preferences.watering.unwrap().2 + 59)
+                                                                % 60;
                                                     }
                                                     _ => {}
                                                 }
@@ -493,8 +547,14 @@ fn main() -> ! {
                                 if !remove {
                                     if (preferences.watering.unwrap().1 > preferences.watering.unwrap().3) || // Hours are incorrect
                                         (preferences.watering.unwrap().1 == preferences.watering.unwrap().3 && // Minutes are incorrect assuming hours are equal
-                                            preferences.watering.unwrap().0 > preferences.watering.unwrap().2) {
-                                        preferences.watering = Some((preferences.watering.unwrap().2, preferences.watering.unwrap().3, preferences.watering.unwrap().0, preferences.watering.unwrap().1));
+                                            preferences.watering.unwrap().0 > preferences.watering.unwrap().2)
+                                    {
+                                        preferences.watering = Some((
+                                            preferences.watering.unwrap().2,
+                                            preferences.watering.unwrap().3,
+                                            preferences.watering.unwrap().0,
+                                            preferences.watering.unwrap().1,
+                                        ));
                                     }
                                 }
                             }
@@ -507,7 +567,7 @@ fn main() -> ! {
                 _ => {
                     if smoke_detector.is_high().unwrap() {
                         // Panic!!!
-                        let roof_open = &roof_vent.is_set_high();
+                        let roof_open = &roof_vent.is_set_high().unwrap();
                         render_screen(FIRE, true, &mut lcd);
                         while smoke_detector.is_high().unwrap() {
                             // Enable sprinklers
@@ -562,28 +622,45 @@ fn main() -> ! {
 
         let mut data_str: String<12> = String::new();
         match current_screen_index {
-            0 => { // Temp
+            0 => {
+                // Temp
                 uwrite!(&mut data_str, "Temp: {}F", get_temperature(&data)).unwrap(); // Str size 9
                 render_screen(&data_str, true, &mut lcd);
-                uwrite!(&mut data_str, "({}, {})", preferences.temperature.0, preferences.temperature.1).unwrap(); // Str size 8
+                uwrite!(
+                    &mut data_str,
+                    "({}, {})",
+                    preferences.temperature.0,
+                    preferences.temperature.1
+                )
+                .unwrap(); // Str size 8
                 render_screen(&data_str, false, &mut lcd);
             }
-            1 => { // Humidity
+            1 => {
+                // Humidity
                 uwrite!(&mut data_str, "RH: {}%", get_humidity(&data)).unwrap(); // Str size 8
                 render_screen(&data_str, true, &mut lcd);
-                uwrite!(&mut data_str, "({}%, {}%)", preferences.humidity.0, preferences.humidity.1).unwrap(); // Str size 12
+                uwrite!(
+                    &mut data_str,
+                    "({}%, {}%)",
+                    preferences.humidity.0,
+                    preferences.humidity.1
+                )
+                .unwrap(); // Str size 12
                 render_screen(&data_str, false, &mut lcd);
             }
-            2 => { // Pressure
+            2 => {
+                // Pressure
                 uwrite!(&mut data_str, "PRS: {} mb", get_pressure(&data)).unwrap(); // Str size 12
                 render_screen(&data_str, true, &mut lcd);
             }
-            3 => { // Date
+            3 => {
+                // Date
                 let (time, date) = preferences.get_date_formatted();
                 render_screen(&time, true, &mut lcd);
                 render_screen(&date, false, &mut lcd);
             }
-            _ => { // Water Schedule
+            _ => {
+                // Water Schedule
                 render_screen(&preferences.format_watering_time(), true, &mut lcd);
             }
         }
@@ -595,9 +672,18 @@ fn main() -> ! {
 /// param delayer: BME sensor delay
 /// param alarm: Buzzer Pin
 /// returns FieldData
-fn get_bme_data(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) -> FieldData {
+fn get_bme_data(
+    bme: &mut Bme680<
+        I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
+        Timer,
+    >,
+    delayer: &mut Timer,
+    alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
+) -> FieldData {
     prep_bme(bme, delayer, alarm);
-    bme.get_sensor_data(delayer).unwrap_or((FieldData::default(), FieldDataCondition::Unchanged)).0
+    bme.get_sensor_data(delayer)
+        .unwrap_or((FieldData::default(), FieldDataCondition::Unchanged))
+        .0
 }
 
 /// Gets temperature in Fahrenheit
@@ -624,7 +710,14 @@ fn get_pressure(data: &FieldData) -> u16 {
 /// param bme: BME sensor reference
 /// param delayer: BME delay
 /// param alarm: Buzzer Pin
-fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) {
+fn prep_bme(
+    bme: &mut Bme680<
+        I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
+        Timer,
+    >,
+    delayer: &mut Timer,
+    alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
+) {
     if bme.set_sensor_mode(delayer, PowerMode::ForcedMode).is_err() {
         loop {
             alarm.set_high().unwrap();
@@ -640,7 +733,19 @@ fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, 
 /// param line: text to render
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
-fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
+fn render_screen(
+    line: &str,
+    top_line: bool,
+    lcd: &mut LCD1602<
+        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+        Timer,
+    >,
+) {
     // Set cursor to the correct line
     if top_line {
         // Reset screen
@@ -656,7 +761,19 @@ fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, Functi
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
+fn render_edit_screen<const N: usize>(
+    line: &String<N>,
+    left_cursor: bool,
+    lcd: &mut LCD1602<
+        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+        Timer,
+    >,
+) {
     // Clear
     lcd.clear().unwrap();
 
@@ -676,7 +793,18 @@ fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: 
 /// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
 /// param line: The date line
 /// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
+fn render_date_edit_screen<const N: usize>(
+    line: &String<N>,
+    lcd: &mut LCD1602<
+        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+        Timer,
+    >,
+) {
     // Clear
     lcd.clear().unwrap();
 
@@ -692,7 +820,19 @@ fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<P
 /// param active: whether to add or remove a ■
 /// param bottom_pos: the x-coordinate
 /// param lcd: LCD instance
-fn render_selector(active: bool, bottom_pos: u8, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
+fn render_selector(
+    active: bool,
+    bottom_pos: u8,
+    lcd: &mut LCD1602<
+        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+        Timer,
+    >,
+) {
     lcd.set_position(bottom_pos, 1).unwrap();
     if active {
         lcd.print("■").unwrap();
@@ -715,7 +855,13 @@ enum RefreshAction {
 /// param wait_time: The amount of time between sensor polling
 /// param preferences: Client Preferences
 /// returns: if the LCD needs an update
-fn should_update(up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullUp>, down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullUp>, select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullUp>, wait_time: &mut u16, preferences: &mut Preferences) -> (bool, RefreshAction) {
+fn should_update(
+    up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullUp>,
+    down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullUp>,
+    select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullUp>,
+    wait_time: &mut u16,
+    preferences: &mut Preferences,
+) -> (bool, RefreshAction) {
     *wait_time += 1;
     // Make sure time is kept track of
     if *wait_time % 100 == 0 {
@@ -772,10 +918,10 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Preferences {
-            temperature: (60, 80), // Ideal range is 60F - 80F
-            humidity: (60, 70), // Ideal range is 60% - 70%
+            temperature: (60, 80),       // Ideal range is 60F - 80F
+            humidity: (60, 70),          // Ideal range is 60% - 70%
             date: (0, 0, 0, 1, 1, 2000), // Date: 00:00:00 Jan 1 2000
-            watering: None, // No default watering times set
+            watering: None,              // No default watering times set
         }
     }
 }
@@ -825,7 +971,14 @@ impl Preferences {
         }
 
         // Update the date tuple
-        self.date = (self.date.0, self.date.1, self.date.2, self.date.3, self.date.4, self.date.5);
+        self.date = (
+            self.date.0,
+            self.date.1,
+            self.date.2,
+            self.date.3,
+            self.date.4,
+            self.date.5,
+        );
     }
 
     /// Gets the date in the HH:MM:SS DD/MM/YYYY format
@@ -838,7 +991,14 @@ impl Preferences {
         let mut val2: String<10> = String::new();
         // TODO Find a way to pad numbers <10 with a "0"
         uwrite!(&mut val1, "{}:{}:{}", self.date.2, self.date.1, self.date.0).unwrap();
-        uwrite!(&mut val2, "{}/{}/{}", self.date.3 + 1, self.date.4 + 1, self.date.5).unwrap();
+        uwrite!(
+            &mut val2,
+            "{}/{}/{}",
+            self.date.3 + 1,
+            self.date.4 + 1,
+            self.date.5
+        )
+        .unwrap();
         (val1, val2)
     }
 
@@ -865,7 +1025,13 @@ impl Preferences {
     /// returns the amount of days in the month
     fn get_days_in_month(&self) -> u8 {
         match self.date.4 {
-            2 => if Self::is_leap_year(self.date.5) { 29 } else { 28 },
+            2 => {
+                if Self::is_leap_year(self.date.5) {
+                    29
+                } else {
+                    28
+                }
+            }
             4 | 6 | 9 | 11 => 30,
             _ => 31,
         }
@@ -891,7 +1057,15 @@ impl Preferences {
         let mut str: String<16> = String::new();
         if let Some(watering_time) = self.watering {
             // TODO Find a way to pad numbers <10 with a "0"
-            uwrite!(str, "{}:{} - {}:{}", watering_time.1, watering_time.0, watering_time.3, watering_time.2).unwrap();
+            uwrite!(
+                str,
+                "{}:{} - {}:{}",
+                watering_time.1,
+                watering_time.0,
+                watering_time.3,
+                watering_time.2
+            )
+            .unwrap();
         } else {
             uwrite!(str, "None").unwrap();
         }
