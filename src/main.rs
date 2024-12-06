@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+use embedded_hal::digital::InputPin;
 use core::time::Duration;
 use bme680::{Bme680, FieldData, FieldDataCondition, I2CAddress, IIRFilterSize, OversamplingSetting, PowerMode, SettingsBuilder};
 use bsp::entry;
@@ -97,29 +98,29 @@ fn main() -> ! {
 
     // Set up LCD1602
     let mut lcd = LCD1602::new(
-        pins.gpio1,
-        pins.gpio0,
-        pins.gpio2,
-        pins.gpio3,
-        pins.gpio4,
-        pins.gpio5,
+        pins.gpio1.into_function(),
+        pins.gpio0.into_function(),
+        pins.gpio2.into_function(),
+        pins.gpio3.into_function(),
+        pins.gpio4.into_function(),
+        pins.gpio5.into_function(),
         delay,
     ).unwrap();
 
     // Set up button up
-    let up_button = pins.gpio10.into_pull_up_input();
+    let mut up_button = pins.gpio10.into_pull_up_input();
 
     // Set up button down
-    let down_button = pins.gpio11.into_pull_up_input();
+    let mut down_button = pins.gpio11.into_pull_up_input();
 
     // Set up button select
-    let select_button = pins.gpio12.into_pull_up_input();
+    let mut select_button = pins.gpio12.into_pull_up_input();
 
     // Set up buzzer
     let mut buzzer = pins.gpio6.into_push_pull_output();
 
     // Set up smoke detector
-    let smoke_detector = pins.gpio7.into_pull_up_input();
+    let mut smoke_detector = pins.gpio7.into_pull_up_input();
 
     // Set up sprinklers
     let mut sprinklers = pins.gpio13.into_push_pull_output();
@@ -140,7 +141,7 @@ fn main() -> ! {
         // Tick buttons
         button_cooldown = tick_buttons(button_cooldown);
 
-        let (update_needed, action) = should_update(&up_button, &down_button, &select_button, &mut wait_time, &mut preferences);
+        let (update_needed, action) = should_update(&mut up_button, &mut down_button, &mut select_button, &mut wait_time, &mut preferences);
 
         if update_needed {
             match action {
@@ -182,7 +183,7 @@ fn main() -> ! {
                                         }
                                         update_date = !update_date;
 
-                                        if up_button.is_high() {
+                                        if up_button.is_high().unwrap() {
                                             if editing_lower {
                                                 if preferences.temperature.0 < 1 {
                                                     preferences.temperature.0 += 1;
@@ -193,7 +194,7 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if down_button.is_high() {
+                                        } else if down_button.is_high().unwrap() {
                                             if editing_lower {
                                                 if preferences.temperature.0 > 0 {
                                                     preferences.temperature.0 -= 1;
@@ -204,10 +205,10 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if select_button.is_high() {
+                                        } else if select_button.is_high().unwrap() {
                                             editing_lower = false;
-                                            // TODO Find alternative
-                                            //lcd.set_cursor_blink_state(State::Off);
+                                            render_selector(false, 15, &mut lcd);
+
                                             refresh = true;
                                             break;
                                         }
@@ -237,7 +238,7 @@ fn main() -> ! {
                                         }
                                         update_date = !update_date;
 
-                                        if up_button.is_high() {
+                                        if up_button.is_high().unwrap() {
                                             if editing_lower {
                                                 if preferences.humidity.0 < 100 {
                                                     preferences.humidity.0 += 1;
@@ -248,7 +249,7 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if down_button.is_high() {
+                                        } else if down_button.is_high().unwrap() {
                                             if editing_lower {
                                                 if preferences.humidity.0 > 0 {
                                                     preferences.humidity.0 -= 1;
@@ -259,10 +260,9 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if select_button.is_high() {
+                                        } else if select_button.is_high().unwrap() {
                                             editing_lower = false;
-                                            // TODO Find alternative
-                                            //lcd.set_cursor_blink_state(State::Off);
+                                            render_selector(false, 15, &mut lcd);
                                             refresh = true;
                                             break;
                                         }
@@ -293,13 +293,13 @@ fn main() -> ! {
                                     }
                                     update_date = !update_date;
 
-                                    if up_button.is_high() {
+                                    if up_button.is_high().unwrap() {
                                         preferences.date.1 = (preferences.date.1 + 1) % 60;
                                         refresh = true;
-                                    } else if down_button.is_high() {
+                                    } else if down_button.is_high().unwrap() {
                                         preferences.date.1 = (preferences.date.1 + 59) % 60;
                                         refresh = true;
-                                    } else if select_button.is_high() {
+                                    } else if select_button.is_high().unwrap() {
                                         refresh = true;
                                         break;
                                     }
@@ -319,13 +319,13 @@ fn main() -> ! {
                                     }
                                     update_date = !update_date;
 
-                                    if up_button.is_high() {
+                                    if up_button.is_high().unwrap() {
                                         preferences.date.2 = (preferences.date.2 + 1) % 24;
                                         refresh = true;
-                                    } else if down_button.is_high() {
+                                    } else if down_button.is_high().unwrap() {
                                         preferences.date.2 = (preferences.date.2 + 23) % 24;
                                         refresh = true;
-                                    } else if select_button.is_high() {
+                                    } else if select_button.is_high().unwrap() {
                                         refresh = true;
                                         break;
                                     }
@@ -345,13 +345,13 @@ fn main() -> ! {
                                     }
                                     update_date = !update_date;
 
-                                    if up_button.is_high() {
+                                    if up_button.is_high().unwrap() {
                                         preferences.date.3 = preferences.change_days(true);
                                         refresh = true;
-                                    } else if down_button.is_high() {
+                                    } else if down_button.is_high().unwrap() {
                                         preferences.date.3 = preferences.change_days(false);
                                         refresh = true;
-                                    } else if select_button.is_high() {
+                                    } else if select_button.is_high().unwrap() {
                                         refresh = true;
                                         break;
                                     }
@@ -373,13 +373,13 @@ fn main() -> ! {
                                     }
                                     update_date = !update_date;
 
-                                    if up_button.is_high() {
+                                    if up_button.is_high().unwrap() {
                                         preferences.date.4 = (preferences.date.4 + 1) % 12;
                                         refresh = true;
-                                    } else if down_button.is_high() {
+                                    } else if down_button.is_high().unwrap() {
                                         preferences.date.4 = (preferences.date.4 + 11) % 12;
                                         refresh = true;
-                                    } else if select_button.is_high() {
+                                    } else if select_button.is_high().unwrap() {
                                         refresh = true;
                                         break;
                                     }
@@ -399,24 +399,23 @@ fn main() -> ! {
                                     }
                                     update_date = !update_date;
 
-                                    if up_button.is_high() {
+                                    if up_button.is_high().unwrap() {
                                         // I'm going to assume that no one is stupid enough
                                         // to actually hit the u16 integer limit
                                         preferences.date.5 += 1;
                                         refresh = true;
-                                    } else if down_button.is_high() {
+                                    } else if down_button.is_high().unwrap() {
                                         if preferences.date.5 != 0 {
                                             preferences.date.5 -= 1;
                                         }
                                         refresh = true;
-                                    } else if select_button.is_high() {
+                                    } else if select_button.is_high().unwrap() {
                                         refresh = true;
                                         break;
                                     }
                                 }
 
-                                // TODO Find alternative
-                                //lcd.set_cursor_blink_state(State::Off);
+                                render_selector(false, 7, &mut lcd);
                             }
                             4 => {
                                 let mut remove: bool = false;
@@ -439,7 +438,7 @@ fn main() -> ! {
                                             break;
                                         }
 
-                                        if up_button.is_high() {
+                                        if up_button.is_high().unwrap() {
                                             if preferences.watering.is_none() {
                                                 preferences.set_default_watering_time();
                                             } else {
@@ -460,7 +459,7 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if down_button.is_high() {
+                                        } else if down_button.is_high().unwrap() {
                                             if preferences.watering.is_none() {
                                                 preferences.set_default_watering_time();
                                             } else {
@@ -481,7 +480,7 @@ fn main() -> ! {
                                                 }
                                             }
                                             refresh = true;
-                                        } else if select_button.is_high() {
+                                        } else if select_button.is_high().unwrap() {
                                             refresh = true;
                                             break;
                                         }
@@ -506,11 +505,11 @@ fn main() -> ! {
                     }
                 }
                 _ => {
-                    if smoke_detector.is_high() {
+                    if smoke_detector.is_high().unwrap() {
                         // Panic!!!
                         let roof_open = &roof_vent.is_set_high();
                         render_screen(FIRE, true, &mut lcd);
-                        while smoke_detector.is_high() {
+                        while smoke_detector.is_high().unwrap() {
                             // Enable sprinklers
                             sprinklers.set_high().unwrap();
                             // Ensure windows are closed
@@ -564,7 +563,6 @@ fn main() -> ! {
         let mut data_str: String<12> = String::new();
         match current_screen_index {
             0 => { // Temp
-                // TODO Something shady is happening with this value
                 uwrite!(&mut data_str, "Temp: {}F", get_temperature(&data)).unwrap(); // Str size 9
                 render_screen(&data_str, true, &mut lcd);
                 uwrite!(&mut data_str, "({}, {})", preferences.temperature.0, preferences.temperature.1).unwrap(); // Str size 8
@@ -642,8 +640,7 @@ fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, 
 /// param line: text to render
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
-fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>,
-    Pin<Gpio2, FunctionNull, PullDown>, Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
+fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
     // Set cursor to the correct line
     if top_line {
         // Reset screen
@@ -659,8 +656,7 @@ fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, Functi
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>, Pin<Gpio2, FunctionNull, PullDown>,
-    Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
+fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
     // Clear
     lcd.clear().unwrap();
 
@@ -668,21 +664,19 @@ fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: 
     lcd.set_position(0, 0).unwrap();
     lcd.print(line).unwrap();
 
-    // Create bottom blinking cursor
+    // Create selection cursor
     if left_cursor {
-        lcd.set_position(0, 1).unwrap();
+        render_selector(true, 0, lcd);
     } else {
-        lcd.set_position(15, 1).unwrap();
+        render_selector(false, 0, lcd);
+        render_selector(true, 15, lcd);
     }
-    // TODO Find alternative
-    //lcd.set_cursor_blink_state(State::On);
 }
 
 /// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
 /// param line: The date line
 /// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>, Pin<Gpio2, FunctionNull, PullDown>,
-    Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
+fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
     // Clear
     lcd.clear().unwrap();
 
@@ -690,10 +684,21 @@ fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<P
     lcd.set_position(0, 0).unwrap();
     lcd.print(line).unwrap();
 
-    // Create blinking cursor
-    lcd.set_position(7, 1).unwrap();
-    // TODO Find alternative
-    //lcd.set_cursor_blink_state(State::On);
+    // Create selection cursor
+    render_selector(true, 7, lcd);
+}
+
+/// Renders a ■ on the bottom line at the specified position
+/// param active: whether to add or remove a ■
+/// param bottom_pos: the x-coordinate
+/// param lcd: LCD instance
+fn render_selector(active: bool, bottom_pos: u8, lcd: &mut LCD1602<Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio0, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>, Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>, Pin<Gpio5, FunctionSio<SioOutput>, PullDown>, Delay>) {
+    lcd.set_position(bottom_pos, 1).unwrap();
+    if active {
+        lcd.print("■").unwrap();
+    } else {
+        lcd.print(" ").unwrap();
+    }
 }
 
 enum RefreshAction {
@@ -710,7 +715,7 @@ enum RefreshAction {
 /// param wait_time: The amount of time between sensor polling
 /// param preferences: Client Preferences
 /// returns: if the LCD needs an update
-fn should_update(up: &Pin<Gpio10, FunctionSio<SioInput>, PullUp>, down: &Pin<Gpio11, FunctionSio<SioInput>, PullUp>, select: &Pin<Gpio12, FunctionSio<SioInput>, PullUp>, wait_time: &mut u16, preferences: &mut Preferences) -> (bool, RefreshAction) {
+fn should_update(up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullUp>, down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullUp>, select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullUp>, wait_time: &mut u16, preferences: &mut Preferences) -> (bool, RefreshAction) {
     *wait_time += 1;
     // Make sure time is kept track of
     if *wait_time % 100 == 0 {
@@ -718,11 +723,11 @@ fn should_update(up: &Pin<Gpio10, FunctionSio<SioInput>, PullUp>, down: &Pin<Gpi
     }
 
     // Prioritize button pressing
-    if up.is_high() {
+    if up.is_high().unwrap() {
         return (true, RefreshAction::UP);
-    } else if down.is_high() {
+    } else if down.is_high().unwrap() {
         return (true, RefreshAction::DOWN);
-    } else if select.is_high() {
+    } else if select.is_high().unwrap() {
         return (true, RefreshAction::SELECT);
     }
 
