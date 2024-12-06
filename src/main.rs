@@ -40,6 +40,20 @@ use ufmt::uwrite;
 
 const FIRE: &str = "Fire Present";
 
+type Bme<'a> = Bme680<
+    I2C<'a, PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
+    Timer,
+>;
+
+type Lcd = LCD1602<
+    Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+    Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+    Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+    Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+    Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+    Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+    Timer,
+>;
 #[entry]
 fn main() -> ! {
     // Grab our singleton objects
@@ -160,19 +174,19 @@ fn main() -> ! {
 
         if update_needed {
             match action {
-                RefreshAction::UP => {
+                RefreshAction::Up => {
                     if button_cooldown == 0 {
                         current_screen_index = next_screen(current_screen_index, true);
                         button_cooldown = 50;
                     }
                 }
-                RefreshAction::DOWN => {
+                RefreshAction::Down => {
                     if button_cooldown == 0 {
                         current_screen_index = next_screen(current_screen_index, false);
                         button_cooldown = 50;
                     }
                 }
-                RefreshAction::SELECT => {
+                RefreshAction::Select => {
                     // Handle SELECT action
                     if button_cooldown == 0 {
                         lcd.clear().unwrap();
@@ -209,10 +223,8 @@ fn main() -> ! {
                                                 if preferences.temperature.0 < 1 {
                                                     preferences.temperature.0 += 1;
                                                 }
-                                            } else {
-                                                if preferences.temperature.1 < 1 {
-                                                    preferences.temperature.1 += 1;
-                                                }
+                                            } else if preferences.temperature.1 < 1 {
+                                                preferences.temperature.1 += 1;
                                             }
                                             refresh = true;
                                         } else if down_button.is_high().unwrap() {
@@ -220,10 +232,8 @@ fn main() -> ! {
                                                 if preferences.temperature.0 > 0 {
                                                     preferences.temperature.0 -= 1;
                                                 }
-                                            } else {
-                                                if preferences.temperature.1 > 0 {
-                                                    preferences.temperature.1 -= 1;
-                                                }
+                                            } else if preferences.temperature.1 > 0 {
+                                                preferences.temperature.1 -= 1;
                                             }
                                             refresh = true;
                                         } else if select_button.is_high().unwrap() {
@@ -237,9 +247,10 @@ fn main() -> ! {
                                 }
                                 // Check legality
                                 if preferences.temperature.0 > preferences.temperature.1 {
-                                    let temp = preferences.temperature.0;
-                                    preferences.temperature.0 = preferences.temperature.1;
-                                    preferences.temperature.1 = temp;
+                                    core::mem::swap(
+                                        &mut preferences.temperature.0,
+                                        &mut preferences.temperature.1,
+                                    );
                                 }
                             }
                             1 => {
@@ -270,10 +281,8 @@ fn main() -> ! {
                                                 if preferences.humidity.0 < 100 {
                                                     preferences.humidity.0 += 1;
                                                 }
-                                            } else {
-                                                if preferences.humidity.1 < 100 {
-                                                    preferences.humidity.1 += 1;
-                                                }
+                                            } else if preferences.humidity.1 < 100 {
+                                                preferences.humidity.1 += 1;
                                             }
                                             refresh = true;
                                         } else if down_button.is_high().unwrap() {
@@ -281,10 +290,8 @@ fn main() -> ! {
                                                 if preferences.humidity.0 > 0 {
                                                     preferences.humidity.0 -= 1;
                                                 }
-                                            } else {
-                                                if preferences.humidity.1 > 0 {
-                                                    preferences.humidity.1 -= 1;
-                                                }
+                                            } else if preferences.humidity.1 > 0 {
+                                                preferences.humidity.1 -= 1;
                                             }
                                             refresh = true;
                                         } else if select_button.is_high().unwrap() {
@@ -297,9 +304,10 @@ fn main() -> ! {
                                 }
                                 // Check legality
                                 if preferences.humidity.0 > preferences.humidity.1 {
-                                    let temp = preferences.humidity.0;
-                                    preferences.humidity.0 = preferences.humidity.1;
-                                    preferences.humidity.1 = temp;
+                                    core::mem::swap(
+                                        &mut preferences.humidity.0,
+                                        &mut preferences.humidity.1,
+                                    );
                                 }
                             }
                             3 => {
@@ -544,18 +552,17 @@ fn main() -> ! {
                                     }
                                 }
                                 // Check legality
-                                if !remove {
-                                    if (preferences.watering.unwrap().1 > preferences.watering.unwrap().3) || // Hours are incorrect
+                                if !remove
+                                    && ((preferences.watering.unwrap().1 > preferences.watering.unwrap().3) || // Hours are incorrect
                                         (preferences.watering.unwrap().1 == preferences.watering.unwrap().3 && // Minutes are incorrect assuming hours are equal
-                                            preferences.watering.unwrap().0 > preferences.watering.unwrap().2)
-                                    {
-                                        preferences.watering = Some((
-                                            preferences.watering.unwrap().2,
-                                            preferences.watering.unwrap().3,
-                                            preferences.watering.unwrap().0,
-                                            preferences.watering.unwrap().1,
-                                        ));
-                                    }
+                                            preferences.watering.unwrap().0 > preferences.watering.unwrap().2))
+                                {
+                                    preferences.watering = Some((
+                                        preferences.watering.unwrap().2,
+                                        preferences.watering.unwrap().3,
+                                        preferences.watering.unwrap().0,
+                                        preferences.watering.unwrap().1,
+                                    ));
                                 }
                             }
                             _ => {
@@ -673,10 +680,7 @@ fn main() -> ! {
 /// param alarm: Buzzer Pin
 /// returns FieldData
 fn get_bme_data(
-    bme: &mut Bme680<
-        I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
-        Timer,
-    >,
+    bme: &mut Bme,
     delayer: &mut Timer,
     alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
 ) -> FieldData {
@@ -711,10 +715,7 @@ fn get_pressure(data: &FieldData) -> u16 {
 /// param delayer: BME delay
 /// param alarm: Buzzer Pin
 fn prep_bme(
-    bme: &mut Bme680<
-        I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
-        Timer,
-    >,
+    bme: &mut Bme,
     delayer: &mut Timer,
     alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
 ) {
@@ -733,19 +734,7 @@ fn prep_bme(
 /// param line: text to render
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
-fn render_screen(
-    line: &str,
-    top_line: bool,
-    lcd: &mut LCD1602<
-        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
-        Timer,
-    >,
-) {
+fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd) {
     // Set cursor to the correct line
     if top_line {
         // Reset screen
@@ -761,19 +750,7 @@ fn render_screen(
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(
-    line: &String<N>,
-    left_cursor: bool,
-    lcd: &mut LCD1602<
-        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
-        Timer,
-    >,
-) {
+fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd) {
     // Clear
     lcd.clear().unwrap();
 
@@ -793,18 +770,7 @@ fn render_edit_screen<const N: usize>(
 /// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
 /// param line: The date line
 /// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(
-    line: &String<N>,
-    lcd: &mut LCD1602<
-        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
-        Timer,
-    >,
-) {
+fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd) {
     // Clear
     lcd.clear().unwrap();
 
@@ -820,19 +786,7 @@ fn render_date_edit_screen<const N: usize>(
 /// param active: whether to add or remove a ■
 /// param bottom_pos: the x-coordinate
 /// param lcd: LCD instance
-fn render_selector(
-    active: bool,
-    bottom_pos: u8,
-    lcd: &mut LCD1602<
-        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
-        Timer,
-    >,
-) {
+fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd) {
     lcd.set_position(bottom_pos, 1).unwrap();
     if active {
         lcd.print("■").unwrap();
@@ -842,10 +796,10 @@ fn render_selector(
 }
 
 enum RefreshAction {
-    UP,
-    DOWN,
-    SELECT,
-    SENSOR,
+    Up,
+    Down,
+    Select,
+    Sensor,
 }
 
 /// Whether to update the LCD
@@ -870,29 +824,26 @@ fn should_update(
 
     // Prioritize button pressing
     if up.is_high().unwrap() {
-        return (true, RefreshAction::UP);
+        return (true, RefreshAction::Up);
     } else if down.is_high().unwrap() {
-        return (true, RefreshAction::DOWN);
+        return (true, RefreshAction::Down);
     } else if select.is_high().unwrap() {
-        return (true, RefreshAction::SELECT);
+        return (true, RefreshAction::Select);
     }
 
     // Check if sensors need updated
     if *wait_time >= 100 {
         *wait_time = 0; // TODO See if this actually works
-        return (true, RefreshAction::SENSOR);
+        return (true, RefreshAction::Sensor);
     }
-    (false, RefreshAction::SENSOR) // It's ok to return SENSOR since it gets ignored
+    (false, RefreshAction::Sensor) // It's ok to return SENSOR since it gets ignored
 }
 
 /// Ticks the cooldown for buttons
 /// param cooldown: The amount of cooldown left
 /// returns the new value for cooldown
-fn tick_buttons(mut cooldown: u8) -> u8 {
-    if cooldown > 0 {
-        cooldown -= 1;
-    }
-    cooldown
+fn tick_buttons(cooldown: u8) -> u8 {
+    cooldown.saturating_sub(1)
 }
 
 /// Iterates forwards or backwards through Screens
@@ -934,21 +885,21 @@ impl Preferences {
         // Check for rollovers
         if self.date.0 >= 60 {
             self.date.1 += self.date.0 / 60;
-            self.date.0 = self.date.0 % 60;
+            self.date.0 %= 60;
         } else {
             return;
         }
 
         if self.date.1 >= 60 {
             self.date.2 += self.date.1 / 60;
-            self.date.1 = self.date.1 % 60;
+            self.date.1 %= 60;
         } else {
             return;
         }
 
         if self.date.2 >= 24 {
             self.date.3 += self.date.2 / 24;
-            self.date.2 = self.date.2 % 24;
+            self.date.2 %= 24;
         } else {
             return;
         }
