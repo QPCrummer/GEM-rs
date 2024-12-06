@@ -2,7 +2,7 @@
 #![no_main]
 
 use bme680::{
-    Bme680, FieldData, FieldDataCondition, I2CAddress, IIRFilterSize, OversamplingSetting,
+    Bme680, FieldData, I2CAddress, IIRFilterSize, OversamplingSetting,
     PowerMode, SettingsBuilder,
 };
 use bsp::entry;
@@ -18,7 +18,6 @@ use rp_pico::hal::Timer;
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
 use rp_pico as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -31,29 +30,17 @@ use lcd1602_rs::LCD1602;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
 use rp_pico::hal::gpio::bank0::{
-    Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5, Gpio6, Gpio8, Gpio9,
+    Gpio10, Gpio11, Gpio12,
 };
-use rp_pico::hal::gpio::{FunctionNull, FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
-use rp_pico::hal::pio::{PIOExt, SM0};
-use rp_pico::pac::PIO0;
+use rp_pico::hal::gpio::{FunctionSio, Pin, PullUp, SioInput};
+use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
+use greenhouse_rs::preferences::Preferences;
+use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
+use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 
 const FIRE: &str = "Fire Present";
 
-type Bme<'a> = Bme680<
-    I2C<'a, PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
-    Timer,
->;
-
-type Lcd = LCD1602<
-    Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
-    Timer,
->;
 #[entry]
 fn main() -> ! {
     // Grab our singleton objects
@@ -313,60 +300,32 @@ fn main() -> ! {
                             3 => {
                                 // Date
 
-                                // Minute
-                                loop {
-                                    if refresh {
-                                        uwrite!(&mut info_str, "Minute: {}", preferences.date.1)
-                                            .unwrap(); // Max str size 10
-                                        render_date_edit_screen(&info_str, &mut lcd);
-                                        refresh = false;
-                                    }
+                                render_time_config_screen(
+                                    "Minute",
+                                    &mut info_str,
+                                    60,
+                                    &mut (preferences.date.1 as u16),
+                                    &mut preferences,
+                                    &mut lcd,
+                                    &mut delay,
+                                    &mut up_button,
+                                    &mut down_button,
+                                    &mut select_button,
+                                );
 
-                                    delay.delay_ms(500);
+                                render_time_config_screen(
+                                    "Hour",
+                                    &mut info_str,
+                                    24,
+                                    &mut (preferences.date.2 as u16),
+                                    &mut preferences,
+                                    &mut lcd,
+                                    &mut delay,
+                                    &mut up_button,
+                                    &mut down_button,
+                                    &mut select_button,
+                                );
 
-                                    if update_date {
-                                        preferences.tick_time();
-                                    }
-                                    update_date = !update_date;
-
-                                    if up_button.is_high().unwrap() {
-                                        preferences.date.1 = (preferences.date.1 + 1) % 60;
-                                        refresh = true;
-                                    } else if down_button.is_high().unwrap() {
-                                        preferences.date.1 = (preferences.date.1 + 59) % 60;
-                                        refresh = true;
-                                    } else if select_button.is_high().unwrap() {
-                                        refresh = true;
-                                        break;
-                                    }
-                                }
-
-                                // Hour
-                                loop {
-                                    if refresh {
-                                        uwrite!(&mut info_str, "Hour: {}", preferences.date.2)
-                                            .unwrap(); // Max str size 8
-                                        render_date_edit_screen(&info_str, &mut lcd);
-                                        refresh = false;
-                                    }
-                                    delay.delay_ms(500);
-
-                                    if update_date {
-                                        preferences.tick_time();
-                                    }
-                                    update_date = !update_date;
-
-                                    if up_button.is_high().unwrap() {
-                                        preferences.date.2 = (preferences.date.2 + 1) % 24;
-                                        refresh = true;
-                                    } else if down_button.is_high().unwrap() {
-                                        preferences.date.2 = (preferences.date.2 + 23) % 24;
-                                        refresh = true;
-                                    } else if select_button.is_high().unwrap() {
-                                        refresh = true;
-                                        break;
-                                    }
-                                }
 
                                 // Day
                                 loop {
@@ -395,34 +354,18 @@ fn main() -> ! {
                                     }
                                 }
 
-                                // Month
-                                // TODO Changing this will for sure break the day counter...
-                                // TODO But I couldn't care less :)
-                                loop {
-                                    if refresh {
-                                        uwrite!(&mut info_str, "Month: {}", preferences.date.4)
-                                            .unwrap(); // Max str size 9
-                                        render_date_edit_screen(&info_str, &mut lcd);
-                                        refresh = false;
-                                    }
-                                    delay.delay_ms(500);
-
-                                    if update_date {
-                                        preferences.tick_time();
-                                    }
-                                    update_date = !update_date;
-
-                                    if up_button.is_high().unwrap() {
-                                        preferences.date.4 = (preferences.date.4 + 1) % 12;
-                                        refresh = true;
-                                    } else if down_button.is_high().unwrap() {
-                                        preferences.date.4 = (preferences.date.4 + 11) % 12;
-                                        refresh = true;
-                                    } else if select_button.is_high().unwrap() {
-                                        refresh = true;
-                                        break;
-                                    }
-                                }
+                                render_time_config_screen(
+                                    "Month",
+                                    &mut info_str,
+                                    12,
+                                    &mut (preferences.date.4 as u16),
+                                    &mut preferences,
+                                    &mut lcd,
+                                    &mut delay,
+                                    &mut up_button,
+                                    &mut down_button,
+                                    &mut select_button,
+                                );
 
                                 // Year
                                 loop {
@@ -450,7 +393,6 @@ fn main() -> ! {
                                         }
                                         refresh = true;
                                     } else if select_button.is_high().unwrap() {
-                                        refresh = true;
                                         break;
                                     }
                                 }
@@ -674,127 +616,6 @@ fn main() -> ! {
     }
 }
 
-/// Gets data from the BME sensor
-/// param bme: BME sensor instance
-/// param delayer: BME sensor delay
-/// param alarm: Buzzer Pin
-/// returns FieldData
-fn get_bme_data(
-    bme: &mut Bme,
-    delayer: &mut Timer,
-    alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
-) -> FieldData {
-    prep_bme(bme, delayer, alarm);
-    bme.get_sensor_data(delayer)
-        .unwrap_or((FieldData::default(), FieldDataCondition::Unchanged))
-        .0
-}
-
-/// Gets temperature in Fahrenheit
-/// param data: FieldData from get_bme_data()
-fn get_temperature(data: &FieldData) -> u8 {
-    (data.temperature_celsius() * (9. / 5.) + 32.) as u8
-}
-
-/// Gets percent humidity (whole number)
-/// param data: FieldData from get_bme_data()
-fn get_humidity(data: &FieldData) -> u8 {
-    data.humidity_percent() as u8
-}
-
-/// Gets atmospheric pressure in millibars
-/// param data: FieldData from get_bme_data()
-fn get_pressure(data: &FieldData) -> u16 {
-    data.pressure_hpa() as u16
-}
-
-/// Sets the sensor's mode to Forced
-/// This should be called before getting data
-/// If there is an error setting up, an alarm is sounded
-/// param bme: BME sensor reference
-/// param delayer: BME delay
-/// param alarm: Buzzer Pin
-fn prep_bme(
-    bme: &mut Bme,
-    delayer: &mut Timer,
-    alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>,
-) {
-    if bme.set_sensor_mode(delayer, PowerMode::ForcedMode).is_err() {
-        loop {
-            alarm.set_high().unwrap();
-            delayer.delay_ms(500);
-            alarm.set_low().unwrap();
-            delayer.delay_ms(1000);
-        }
-    }
-}
-
-/// Basic function for rendering text onto the LCD
-/// It only clears the screen when the top line is written to
-/// param line: text to render
-/// param top_line: if the top line is to be written to
-/// param lcd: LCD instance
-fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd) {
-    // Set cursor to the correct line
-    if top_line {
-        // Reset screen
-        lcd.clear().unwrap();
-        lcd.set_position(0, 0).unwrap();
-    } else {
-        lcd.set_position(0, 1).unwrap();
-    }
-    lcd.print(line).unwrap();
-}
-
-/// Renders the Preferences on screen with a blinking indicator cursor
-/// param line: The preferences line
-/// param left_cursor: If the lower bound is selected
-/// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd) {
-    // Clear
-    lcd.clear().unwrap();
-
-    // Write top info
-    lcd.set_position(0, 0).unwrap();
-    lcd.print(line).unwrap();
-
-    // Create selection cursor
-    if left_cursor {
-        render_selector(true, 0, lcd);
-    } else {
-        render_selector(false, 0, lcd);
-        render_selector(true, 15, lcd);
-    }
-}
-
-/// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
-/// param line: The date line
-/// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd) {
-    // Clear
-    lcd.clear().unwrap();
-
-    // Write date segment
-    lcd.set_position(0, 0).unwrap();
-    lcd.print(line).unwrap();
-
-    // Create selection cursor
-    render_selector(true, 7, lcd);
-}
-
-/// Renders a ■ on the bottom line at the specified position
-/// param active: whether to add or remove a ■
-/// param bottom_pos: the x-coordinate
-/// param lcd: LCD instance
-fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd) {
-    lcd.set_position(bottom_pos, 1).unwrap();
-    if active {
-        lcd.print("■").unwrap();
-    } else {
-        lcd.print(" ").unwrap();
-    }
-}
-
 enum RefreshAction {
     Up,
     Down,
@@ -857,174 +678,4 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
         current_screen_index = (current_screen_index + 5 - 1) % 5;
     }
     current_screen_index
-}
-
-pub struct Preferences {
-    pub temperature: (u8, u8),
-    pub humidity: (u8, u8),
-    pub date: (u8, u8, u8, u8, u8, u16), // Sec, Min, Hour, Day, Month, Year
-    pub watering: Option<(u8, u8, u8, u8)>, // Start (Min, Hour), End (Min, Hour)
-}
-
-impl Default for Preferences {
-    fn default() -> Self {
-        Preferences {
-            temperature: (60, 80),       // Ideal range is 60F - 80F
-            humidity: (60, 70),          // Ideal range is 60% - 70%
-            date: (0, 0, 0, 1, 1, 2000), // Date: 00:00:00 Jan 1 2000
-            watering: None,              // No default watering times set
-        }
-    }
-}
-
-impl Preferences {
-    /// Increments by 1 second
-    fn tick_time(&mut self) {
-        self.date.0 += 1;
-
-        // Check for rollovers
-        if self.date.0 >= 60 {
-            self.date.1 += self.date.0 / 60;
-            self.date.0 %= 60;
-        } else {
-            return;
-        }
-
-        if self.date.1 >= 60 {
-            self.date.2 += self.date.1 / 60;
-            self.date.1 %= 60;
-        } else {
-            return;
-        }
-
-        if self.date.2 >= 24 {
-            self.date.3 += self.date.2 / 24;
-            self.date.2 %= 24;
-        } else {
-            return;
-        }
-
-        // Handle month and day rollovers
-        loop {
-            let days_in_month = self.get_days_in_month();
-
-            if self.date.3 > days_in_month {
-                self.date.3 -= days_in_month;
-                self.date.4 += 1;
-            } else {
-                break;
-            }
-
-            if self.date.4 > 12 {
-                self.date.4 = 1;
-                self.date.5 += 1;
-            }
-        }
-
-        // Update the date tuple
-        self.date = (
-            self.date.0,
-            self.date.1,
-            self.date.2,
-            self.date.3,
-            self.date.4,
-            self.date.5,
-        );
-    }
-
-    /// Gets the date in the HH:MM:SS DD/MM/YYYY format
-    /// Since the indexes start at 0 and months and days start at 1,
-    /// the function ensures that 1 is added
-    /// returns: (HH:MM:SS, DD/MM/YYYY)
-    fn get_date_formatted(&mut self) -> (String<8>, String<10>) {
-        // Format the date as a string
-        let mut val1: String<8> = String::new();
-        let mut val2: String<10> = String::new();
-        // TODO Find a way to pad numbers <10 with a "0"
-        uwrite!(&mut val1, "{}:{}:{}", self.date.2, self.date.1, self.date.0).unwrap();
-        uwrite!(
-            &mut val2,
-            "{}/{}/{}",
-            self.date.3 + 1,
-            self.date.4 + 1,
-            self.date.5
-        )
-        .unwrap();
-        (val1, val2)
-    }
-
-    /// Calculates if it is leap year
-    /// param year: The current year
-    fn is_leap_year(year: u16) -> bool {
-        year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-    }
-
-    /// Gets the next index for the current day depending on the month and leap year
-    /// param increment: If the values are incrementing (not decrementing)
-    /// returns the next day's index
-    fn change_days(&self, increment: bool) -> u8 {
-        let days_in_month: u8 = self.get_days_in_month();
-
-        if increment {
-            (self.date.3 + 1) % days_in_month
-        } else {
-            (self.date.3 + (days_in_month - 1)) % days_in_month
-        }
-    }
-
-    /// Gets the amount of days in the current month
-    /// returns the amount of days in the month
-    fn get_days_in_month(&self) -> u8 {
-        match self.date.4 {
-            2 => {
-                if Self::is_leap_year(self.date.5) {
-                    29
-                } else {
-                    28
-                }
-            }
-            4 | 6 | 9 | 11 => 30,
-            _ => 31,
-        }
-    }
-
-    /// Checks if it is time to enable the sprinklers
-    /// returns if the current time is within the watering time
-    /// returns false if there is no watering time set
-    fn is_watering_time(&self) -> bool {
-        if let Some(watering_time) = self.watering {
-            self.date.1 >= watering_time.0 && // Minutes are not too small
-                self.date.1 <= watering_time.2 && // Minutes are not too large
-                self.date.2 >= watering_time.1 && // Hours are not too small
-                self.date.2 <= watering_time.3 // Hours are not too large
-        } else {
-            false
-        }
-    }
-
-    /// Formats the watering time: HH:MM - HH:MM
-    /// Returns a String of length 16 containing the formatted times
-    fn format_watering_time(&self) -> String<16> {
-        let mut str: String<16> = String::new();
-        if let Some(watering_time) = self.watering {
-            // TODO Find a way to pad numbers <10 with a "0"
-            uwrite!(
-                str,
-                "{}:{} - {}:{}",
-                watering_time.1,
-                watering_time.0,
-                watering_time.3,
-                watering_time.2
-            )
-            .unwrap();
-        } else {
-            uwrite!(str, "None").unwrap();
-        }
-        str
-    }
-
-    /// Sets the watering time from 00:00 to 01:00
-    fn set_default_watering_time(&mut self) {
-        self.watering = Some((0, 0, 0, 1));
-    }
 }

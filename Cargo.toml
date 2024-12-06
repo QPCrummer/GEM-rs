@@ -1,11 +1,11 @@
 [package]
 edition = "2021"
-name = "rp2040-project-template"
+name = "greenhouse-rs"
 version = "0.1.0"
-license = "MIT OR Apache-2.0"
+license = "MIT"
+authors = ["QPCrummer"]
 
 [dependencies]
-cortex-m-rt = "0.7.5"
 embedded-hal = { version = "1.0.0" }
 
 defmt = "0.3"
@@ -16,16 +16,7 @@ bme680 = { git = "https://github.com/marcelbuesing/bme680" }
 heapless = { version = "0.8.0", features = ["ufmt"] }
 lcd1602-rs = { git = "https://github.com/QPCrummer/lcd1602-rs" }
 ufmt = "0.2.0"
-
-# We're using a Pico by default on this template
 rp-pico = "0.9"
-
-# but you can use any BSP. Uncomment this to use the pro_micro_rp2040 BSP instead
-# sparkfun-pro-micro-rp2040 = "0.8"
-
-# If you're not going to use a Board Support Package you'll need these:
-# rp2040-hal = { version="0.10", features=["rt", "critical-section-impl"] }
-# rp2040-boot2 = "0.3"
 
 # cargo build/run
 [profile.dev]
@@ -78,3 +69,10 @@ debug-assertions = false
 incremental = false
 lto = 'fat'
 opt-level = 3
+
+[[bin]]
+name = "greenhouse-rs"
+path = "src/main.rs"
+test = false
+doctest = false
+bench = false
