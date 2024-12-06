@@ -15,7 +15,7 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 i2c-pio = "0.8.0"
 bme680 = "0.6.0"
 heapless = { version = "0.8.0", features = ["ufmt"] }
-lcd1602-driver = "0.2.0"
+lcd1602-rs = { git = "https://github.com/QPCrummer/lcd1602-rs" }
 ufmt = "0.2.0"
 
 # We're using a Pico by default on this template

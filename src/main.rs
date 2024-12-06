@@ -21,20 +21,15 @@ use bsp::hal::{
 use cortex_m::delay::Delay;
 use heapless::String;
 use i2c_pio::I2C;
-use lcd1602_driver::command::{DataWidth, State};
-use lcd1602_driver::lcd;
-use lcd1602_driver::lcd::{Basic, Ext, Lcd};
-use lcd1602_driver::sender::ParallelSender;
+use lcd1602_rs::LCD1602;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
-use rp_pico::hal::gpio::{DynPinId, FunctionI2C, FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
-use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6, Gpio8, Gpio9};
+use rp_pico::hal::gpio::{FunctionNull, FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
+use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5, Gpio6, Gpio8, Gpio9};
 use rp_pico::hal::pio::{PIOExt, SM0};
 use rp_pico::pac::PIO0;
 use ufmt::uwrite;
 
-static mut SENDER: Option<ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>> = None;
-static mut DELAY: Option<Delay> = None;
 const FIRE: &str = "Fire Present";
 
 #[entry]
@@ -101,30 +96,15 @@ fn main() -> ! {
     bme.set_sensor_mode(&mut delay, PowerMode::ForcedMode).unwrap();
 
     // Set up LCD1602
-
-    unsafe {
-        // TODO Fix this
-        SENDER = Some(ParallelSender::<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>::new_4pin(
-            pins.gpio0.into_function().into_dyn_pin(),
-            pins.gpio21.into_function().into_dyn_pin(),
-            pins.gpio1.into_function().into_dyn_pin(),
-            pins.gpio2.into_function().into_dyn_pin(),
-            pins.gpio3.into_function().into_dyn_pin(),
-            pins.gpio4.into_function().into_dyn_pin(),
-            pins.gpio5.into_function().into_dyn_pin(),
-            None,
-        ));
-
-        DELAY = Some(delay);
-    }
-
-    let lcd_config = lcd::Config::default().set_data_width(DataWidth::Bit4);
-    let mut lcd = Lcd::new(
-        unsafe { SENDER.as_mut().unwrap() },
-        unsafe { DELAY.as_mut().unwrap() },
-        lcd_config,
-        10,
-    );
+    let mut lcd = LCD1602::new(
+        pins.gpio1,
+        pins.gpio0,
+        pins.gpio2,
+        pins.gpio3,
+        pins.gpio4,
+        pins.gpio5,
+        delay,
+    ).unwrap();
 
     // Set up button up
     let up_button = pins.gpio10.into_pull_up_input();
@@ -179,7 +159,7 @@ fn main() -> ! {
                 RefreshAction::SELECT => {
                     // Handle SELECT action
                     if button_cooldown == 0 {
-                        lcd.clean_display();
+                        lcd.clear().unwrap();
                         let mut editing_lower: bool = true;
                         let mut update_date: bool = false;
                         let mut refresh: bool = true;
@@ -226,7 +206,8 @@ fn main() -> ! {
                                             refresh = true;
                                         } else if select_button.is_high() {
                                             editing_lower = false;
-                                            lcd.set_cursor_blink_state(State::Off);
+                                            // TODO Find alternative
+                                            //lcd.set_cursor_blink_state(State::Off);
                                             refresh = true;
                                             break;
                                         }
@@ -280,7 +261,8 @@ fn main() -> ! {
                                             refresh = true;
                                         } else if select_button.is_high() {
                                             editing_lower = false;
-                                            lcd.set_cursor_blink_state(State::Off);
+                                            // TODO Find alternative
+                                            //lcd.set_cursor_blink_state(State::Off);
                                             refresh = true;
                                             break;
                                         }
@@ -433,7 +415,8 @@ fn main() -> ! {
                                     }
                                 }
 
-                                lcd.set_cursor_blink_state(State::Off);
+                                // TODO Find alternative
+                                //lcd.set_cursor_blink_state(State::Off);
                             }
                             4 => {
                                 let mut remove: bool = false;
@@ -529,20 +512,20 @@ fn main() -> ! {
                         render_screen(FIRE, true, &mut lcd);
                         while smoke_detector.is_high() {
                             // Enable sprinklers
-                            sprinklers.set_high();
+                            sprinklers.set_high().unwrap();
                             // Ensure windows are closed
-                            roof_vent.set_low();
+                            roof_vent.set_low().unwrap();
                             // Sound alarm
-                            buzzer.set_high();
+                            buzzer.set_high().unwrap();
                             delay.delay_ms(1000);
                             // Still keep track of time though
                             preferences.tick_time();
                         }
                         // Safe; Disable sprinklers and open vent if it was open before
-                        buzzer.set_low();
-                        sprinklers.set_low();
+                        buzzer.set_low().unwrap();
+                        sprinklers.set_low().unwrap();
                         if *roof_open {
-                            roof_vent.set_high();
+                            roof_vent.set_high().unwrap();
                         }
                     }
 
@@ -552,25 +535,25 @@ fn main() -> ! {
                     let temp = get_temperature(&data);
                     if temp < preferences.temperature.0 || temp > preferences.temperature.1 {
                         // open vent
-                        roof_vent.set_high();
+                        roof_vent.set_high().unwrap();
                     } else {
-                        roof_vent.set_low();
+                        roof_vent.set_low().unwrap();
                     }
 
                     // Check if humidity is valid
                     let humidity = get_humidity(&data);
                     if humidity < preferences.humidity.0 || humidity > preferences.humidity.1 {
                         // enable sprinklers
-                        sprinklers.set_high();
+                        sprinklers.set_high().unwrap();
                     } else {
-                        sprinklers.set_low();
+                        sprinklers.set_low().unwrap();
                     }
 
                     // Check if it is watering time
                     if preferences.is_watering_time() {
-                        sprinklers.set_high();
+                        sprinklers.set_high().unwrap();
                     } else {
-                        sprinklers.set_low();
+                        sprinklers.set_low().unwrap();
                     }
                 }
             }
@@ -614,7 +597,7 @@ fn main() -> ! {
 /// param delayer: BME sensor delay
 /// param alarm: Buzzer Pin
 /// returns FieldData
-fn get_bme_data(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionI2C, PullDown>, Pin<Gpio9, FunctionI2C, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) -> FieldData {
+fn get_bme_data(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) -> FieldData {
     prep_bme(bme, delayer, alarm);
     bme.get_sensor_data(delayer).unwrap_or((FieldData::default(), FieldDataCondition::Unchanged)).0
 }
@@ -643,12 +626,12 @@ fn get_pressure(data: &FieldData) -> u16 {
 /// param bme: BME sensor reference
 /// param delayer: BME delay
 /// param alarm: Buzzer Pin
-fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionI2C, PullDown>, Pin<Gpio9, FunctionI2C, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) {
+fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>, Delay>, delayer: &mut Delay, alarm: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>) {
     if bme.set_sensor_mode(delayer, PowerMode::ForcedMode).is_err() {
         loop {
-            alarm.set_high();
+            alarm.set_high().unwrap();
             delayer.delay_ms(500);
-            alarm.set_low();
+            alarm.set_low().unwrap();
             delayer.delay_ms(1000);
         }
     }
@@ -659,53 +642,58 @@ fn prep_bme(bme: &mut Bme680<I2C<PIO0, SM0, Pin<Gpio8, FunctionI2C, PullDown>, P
 /// param line: text to render
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
-fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
+fn render_screen(line: &str, top_line: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>,
+    Pin<Gpio2, FunctionNull, PullDown>, Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
     // Set cursor to the correct line
     if top_line {
         // Reset screen
-        lcd.clean_display();
-        lcd.set_cursor_pos((0, 0));
+        lcd.clear().unwrap();
+        lcd.set_position(0, 0).unwrap();
     } else {
-        lcd.set_cursor_pos((0, 1));
+        lcd.set_position(0, 1).unwrap();
     }
-    lcd.write_str_to_cur(line);
+    lcd.print(line).unwrap();
 }
 
 /// Renders the Preferences on screen with a blinking indicator cursor
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
-fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
+fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>, Pin<Gpio2, FunctionNull, PullDown>,
+    Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
     // Clear
-    lcd.clean_display();
+    lcd.clear().unwrap();
 
     // Write top info
-    lcd.set_cursor_pos((0, 0));
-    lcd.write_str_to_cur(line);
+    lcd.set_position(0, 0).unwrap();
+    lcd.print(line).unwrap();
 
     // Create bottom blinking cursor
     if left_cursor {
-        lcd.set_cursor_pos((0, 1));
+        lcd.set_position(0, 1).unwrap();
     } else {
-        lcd.set_cursor_pos((15, 1));
+        lcd.set_position(15, 1).unwrap();
     }
-    lcd.set_cursor_blink_state(State::On);
+    // TODO Find alternative
+    //lcd.set_cursor_blink_state(State::On);
 }
 
 /// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
 /// param line: The date line
 /// param lcd: LCD instance
-fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd<'static, 'static, ParallelSender<Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, Pin<DynPinId, FunctionSio<SioOutput>, PullDown>, 4>, Delay<>>) {
+fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut LCD1602<Pin<Gpio1, FunctionNull, PullDown>, Pin<Gpio0, FunctionNull, PullDown>, Pin<Gpio2, FunctionNull, PullDown>,
+    Pin<Gpio3, FunctionNull, PullDown>, Pin<Gpio4, FunctionNull, PullDown>, Pin<Gpio5, FunctionNull, PullDown>, Delay>) {
     // Clear
-    lcd.clean_display();
+    lcd.clear().unwrap();
 
     // Write date segment
-    lcd.set_cursor_pos((0, 0));
-    lcd.write_str_to_cur(line);
+    lcd.set_position(0, 0).unwrap();
+    lcd.print(line).unwrap();
 
     // Create blinking cursor
-    lcd.set_cursor_pos((7, 1));
-    lcd.set_cursor_blink_state(State::On);
+    lcd.set_position(7, 1).unwrap();
+    // TODO Find alternative
+    //lcd.set_cursor_blink_state(State::On);
 }
 
 enum RefreshAction {
@@ -910,5 +898,3 @@ impl Preferences {
         self.watering = Some((0, 0, 0, 1));
     }
 }
-
-// End of file
