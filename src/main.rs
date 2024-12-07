@@ -29,10 +29,8 @@ use i2c_pio::I2C;
 use lcd1602_rs::LCD1602;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
-use rp_pico::hal::gpio::bank0::{
-    Gpio10, Gpio11, Gpio12,
-};
-use rp_pico::hal::gpio::{FunctionSio, Pin, PullUp, SioInput};
+use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6};
+use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
 use greenhouse_rs::preferences::Preferences;
@@ -76,9 +74,9 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-
     let mut delay = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+
+    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
     let i2c_pio = I2C::new(
         &mut pio,
@@ -90,7 +88,7 @@ fn main() -> ! {
     );
 
     // Set up BME680
-    let mut bme = Bme680::init(i2c_pio, &mut delay, I2CAddress::Primary).unwrap();
+    let mut bme = Bme680::init(i2c_pio, &mut delay, I2CAddress::Secondary).unwrap();
     let settings = SettingsBuilder::new()
         .with_humidity_oversampling(OversamplingSetting::OS2x)
         .with_pressure_oversampling(OversamplingSetting::OS4x)
@@ -118,13 +116,13 @@ fn main() -> ! {
     .unwrap();
 
     // Set up button up
-    let mut up_button = pins.gpio10.into_pull_up_input();
+    let mut up_button = pins.gpio10.into_pull_down_input();
 
     // Set up button down
-    let mut down_button = pins.gpio11.into_pull_up_input();
+    let mut down_button = pins.gpio11.into_pull_down_input();
 
     // Set up button select
-    let mut select_button = pins.gpio12.into_pull_up_input();
+    let mut select_button = pins.gpio12.into_pull_down_input();
 
     // Set up buzzer
     let mut buzzer = pins.gpio6.into_push_pull_output();
@@ -162,18 +160,24 @@ fn main() -> ! {
         if update_needed {
             match action {
                 RefreshAction::Up => {
+                    debug(&mut buzzer, delay);
                     if button_cooldown == 0 {
                         current_screen_index = next_screen(current_screen_index, true);
                         button_cooldown = 50;
                     }
                 }
                 RefreshAction::Down => {
+                    debug(&mut buzzer, delay);
+                    debug(&mut buzzer, delay);
                     if button_cooldown == 0 {
                         current_screen_index = next_screen(current_screen_index, false);
                         button_cooldown = 50;
                     }
                 }
                 RefreshAction::Select => {
+                    debug(&mut buzzer, delay);
+                    debug(&mut buzzer, delay);
+                    debug(&mut buzzer, delay);
                     // Handle SELECT action
                     if button_cooldown == 0 {
                         lcd.clear().unwrap();
@@ -631,9 +635,9 @@ enum RefreshAction {
 /// param preferences: Client Preferences
 /// returns: if the LCD needs an update
 fn should_update(
-    up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullUp>,
-    down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullUp>,
-    select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullUp>,
+    up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
+    down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
+    select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
     wait_time: &mut u16,
     preferences: &mut Preferences,
 ) -> (bool, RefreshAction) {
@@ -678,4 +682,11 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
         current_screen_index = (current_screen_index + 5 - 1) % 5;
     }
     current_screen_index
+}
+
+fn debug(mut buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
+    buzzer.set_high().unwrap();
+    delay.delay_ms(500);
+    buzzer.set_low().unwrap();
+    delay.delay_ms(500);
 }

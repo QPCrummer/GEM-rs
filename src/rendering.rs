@@ -105,9 +105,9 @@ pub fn render_time_config_screen(
     preferences: &mut Preferences,
     lcd: &mut Lcd,
     delay: &mut Timer,
-    up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullUp>,
-    down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullUp>,
-    select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullUp>,
+    up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
+    down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
+    select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
 )
 {
     let mut refresh: bool = true;
