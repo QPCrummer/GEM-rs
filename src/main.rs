@@ -6,6 +6,7 @@ use bme680::{
 };
 use bsp::entry;
 use core::time::Duration;
+use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::InputPin;
@@ -43,6 +44,7 @@ const FIRE: &str = "Fire Present";
 
 #[entry]
 fn main() -> ! {
+    info!("GreenHousePi Starting");
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
     let _core = pac::CorePeripherals::take().unwrap();
@@ -145,6 +147,8 @@ fn main() -> ! {
     // Cooldowns
     let mut button_cooldown: u8 = 50; // 500ms cooldown
 
+    info!("GreenHousePi Ready");
+
     loop {
         delay.delay_ms(10);
 
@@ -158,6 +162,9 @@ fn main() -> ! {
             &mut wait_time,
             &mut preferences,
         );
+
+        info!("update_needed: {:?}", update_needed);
+        info!("action: {:?}", action);
 
         if update_needed {
             match action {
@@ -621,6 +628,7 @@ fn main() -> ! {
     }
 }
 
+#[derive(Format)]
 enum RefreshAction {
     Up,
     Down,
@@ -682,6 +690,7 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
     } else {
         current_screen_index = (current_screen_index + 5 - 1) % 5;
     }
+    info!("Next Screen: {}", current_screen_index);
     current_screen_index
 }
 
