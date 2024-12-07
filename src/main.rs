@@ -2,8 +2,7 @@
 #![no_main]
 
 use bme680::{
-    Bme680, FieldData, I2CAddress, IIRFilterSize, OversamplingSetting,
-    PowerMode, SettingsBuilder,
+    Bme680, FieldData, I2CAddress, IIRFilterSize, OversamplingSetting, PowerMode, SettingsBuilder,
 };
 use bsp::entry;
 use core::time::Duration;
@@ -24,6 +23,12 @@ use bsp::hal::{
     pac,
     watchdog::Watchdog,
 };
+use greenhouse_rs::preferences::Preferences;
+use greenhouse_rs::rendering::{
+    render_date_edit_screen, render_edit_screen, render_screen, render_selector,
+    render_time_config_screen,
+};
+use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 use heapless::String;
 use i2c_pio::I2C;
 use lcd1602_rs::LCD1602;
@@ -33,9 +38,6 @@ use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
-use greenhouse_rs::preferences::Preferences;
-use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
-use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 
 const FIRE: &str = "Fire Present";
 
@@ -329,7 +331,6 @@ fn main() -> ! {
                                     &mut down_button,
                                     &mut select_button,
                                 );
-
 
                                 // Day
                                 loop {

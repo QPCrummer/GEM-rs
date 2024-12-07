@@ -1,3 +1,4 @@
+use crate::preferences::Preferences;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::InputPin;
 use heapless::String;
@@ -6,7 +7,6 @@ use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpi
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
 use rp_pico::hal::Timer;
 use ufmt::uwrite;
-use crate::preferences::Preferences;
 
 use panic_probe as _;
 
@@ -108,14 +108,12 @@ pub fn render_time_config_screen(
     up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
-)
-{
+) {
     let mut refresh: bool = true;
     let mut update_date: bool = false;
     loop {
         if refresh {
-            uwrite!(info_str, "{}: {}", unit, preference)
-                .unwrap(); // Max str size 10
+            uwrite!(info_str, "{}: {}", unit, preference).unwrap(); // Max str size 10
             render_date_edit_screen(&info_str, lcd);
             refresh = false;
         }
