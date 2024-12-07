@@ -1,5 +1,5 @@
-use ufmt::uwrite;
 use heapless::String;
+use ufmt::uwrite;
 
 use panic_probe as _;
 
@@ -98,7 +98,7 @@ impl Preferences {
             self.date.4 + 1,
             self.date.5
         )
-            .unwrap();
+        .unwrap();
         (val1, val2)
     }
 
@@ -165,7 +165,7 @@ impl Preferences {
                 watering_time.3,
                 watering_time.2
             )
-                .unwrap();
+            .unwrap();
         } else {
             uwrite!(str, "None").unwrap();
         }

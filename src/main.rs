@@ -2,11 +2,11 @@
 #![no_main]
 
 use bme680::{
-    Bme680, FieldData, I2CAddress, IIRFilterSize, OversamplingSetting,
-    PowerMode, SettingsBuilder,
+    Bme680, FieldData, I2CAddress, IIRFilterSize, OversamplingSetting, PowerMode, SettingsBuilder,
 };
 use bsp::entry;
 use core::time::Duration;
+use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::InputPin;
@@ -24,6 +24,12 @@ use bsp::hal::{
     pac,
     watchdog::Watchdog,
 };
+use greenhouse_rs::preferences::Preferences;
+use greenhouse_rs::rendering::{
+    render_date_edit_screen, render_edit_screen, render_screen, render_selector,
+    render_time_config_screen,
+};
+use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 use heapless::String;
 use i2c_pio::I2C;
 use lcd1602_rs::LCD1602;
@@ -33,14 +39,12 @@ use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
-use greenhouse_rs::preferences::Preferences;
-use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
-use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 
 const FIRE: &str = "Fire Present";
 
 #[entry]
 fn main() -> ! {
+    info!("GreenHousePi Starting");
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
     let _core = pac::CorePeripherals::take().unwrap();
@@ -143,6 +147,8 @@ fn main() -> ! {
     // Cooldowns
     let mut button_cooldown: u8 = 50; // 500ms cooldown
 
+    info!("GreenHousePi Ready");
+
     loop {
         delay.delay_ms(10);
 
@@ -156,6 +162,9 @@ fn main() -> ! {
             &mut wait_time,
             &mut preferences,
         );
+
+        info!("update_needed: {:?}", update_needed);
+        info!("action: {:?}", action);
 
         if update_needed {
             match action {
@@ -329,7 +338,6 @@ fn main() -> ! {
                                     &mut down_button,
                                     &mut select_button,
                                 );
-
 
                                 // Day
                                 loop {
@@ -620,6 +628,7 @@ fn main() -> ! {
     }
 }
 
+#[derive(Format)]
 enum RefreshAction {
     Up,
     Down,
@@ -681,10 +690,11 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
     } else {
         current_screen_index = (current_screen_index + 5 - 1) % 5;
     }
+    info!("Next Screen: {}", current_screen_index);
     current_screen_index
 }
 
-fn debug(mut buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
+fn debug(buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
     buzzer.set_high().unwrap();
     delay.delay_ms(500);
     buzzer.set_low().unwrap();

@@ -1,12 +1,13 @@
+use crate::preferences::Preferences;
+use defmt::info;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::InputPin;
 use heapless::String;
 use lcd1602_rs::LCD1602;
 use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5};
-use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, PullUp, SioInput, SioOutput};
+use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::Timer;
 use ufmt::uwrite;
-use crate::preferences::Preferences;
 
 use panic_probe as _;
 
@@ -26,6 +27,7 @@ type Lcd = LCD1602<
 /// param top_line: if the top line is to be written to
 /// param lcd: LCD instance
 pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd) {
+    info!("Rendering: {}, top: {}", line, top_line);
     // Set cursor to the correct line
     if top_line {
         // Reset screen
@@ -42,6 +44,7 @@ pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd) {
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
 pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd) {
+    info!("Rendering: {}, Cursor: {}", line.as_str(), left_cursor);
     // Clear
     lcd.clear().unwrap();
 
@@ -62,6 +65,7 @@ pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, l
 /// param line: The date line
 /// param lcd: LCD instance
 pub fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd) {
+    info!("Rendering date: {}", line.as_str());
     // Clear
     lcd.clear().unwrap();
 
@@ -97,6 +101,7 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd) {
 /// param up_button: Up button instance
 /// param down_button: Down button instance
 /// param select_button: Select button instance
+#[allow(clippy::too_many_arguments)]
 pub fn render_time_config_screen(
     unit: &str,
     info_str: &mut String<11>,
@@ -108,15 +113,13 @@ pub fn render_time_config_screen(
     up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
-)
-{
+) {
     let mut refresh: bool = true;
     let mut update_date: bool = false;
     loop {
         if refresh {
-            uwrite!(info_str, "{}: {}", unit, preference)
-                .unwrap(); // Max str size 10
-            render_date_edit_screen(&info_str, lcd);
+            uwrite!(info_str, "{}: {}", unit, preference).unwrap(); // Max str size 10
+            render_date_edit_screen(info_str, lcd);
             refresh = false;
         }
 
