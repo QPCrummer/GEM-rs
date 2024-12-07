@@ -694,7 +694,7 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
     current_screen_index
 }
 
-fn debug(mut buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
+fn debug(buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
     buzzer.set_high().unwrap();
     delay.delay_ms(500);
     buzzer.set_low().unwrap();

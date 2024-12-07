@@ -101,6 +101,7 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd) {
 /// param up_button: Up button instance
 /// param down_button: Down button instance
 /// param select_button: Select button instance
+#[allow(clippy::too_many_arguments)]
 pub fn render_time_config_screen(
     unit: &str,
     info_str: &mut String<11>,
@@ -118,7 +119,7 @@ pub fn render_time_config_screen(
     loop {
         if refresh {
             uwrite!(info_str, "{}: {}", unit, preference).unwrap(); // Max str size 10
-            render_date_edit_screen(&info_str, lcd);
+            render_date_edit_screen(info_str, lcd);
             refresh = false;
         }
 
