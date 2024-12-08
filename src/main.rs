@@ -24,12 +24,15 @@ use bsp::hal::{
     pac,
     watchdog::Watchdog,
 };
+use hd44780_driver::bus::FourBitBusPins;
+use hd44780_driver::{Cursor, CursorBlink, HD44780};
+use hd44780_driver::memory_map::MemoryMap1602;
+use hd44780_driver::setup::DisplayOptions4Bit;
 use heapless::String;
 use i2c_pio::I2C;
-use lcd1602_rs::LCD1602;
 use rp_pico::hal;
 use rp_pico::hal::fugit::RateExtU32;
-use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio6};
+use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio13, Gpio6};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
@@ -94,6 +97,7 @@ fn main() -> ! {
         .with_pressure_oversampling(OversamplingSetting::OS4x)
         .with_temperature_oversampling(OversamplingSetting::OS8x)
         .with_temperature_filter(IIRFilterSize::Size3)
+        .with_temperature_offset(-8.9)
         .with_gas_measurement(Duration::from_millis(1500), 320, 25)
         .with_run_gas(true)
         .build();
@@ -104,16 +108,37 @@ fn main() -> ! {
         .unwrap();
 
     // Set up LCD1602
-    let mut lcd = LCD1602::new(
-        pins.gpio1.into_function(),
-        pins.gpio0.into_function(),
-        pins.gpio2.into_function(),
-        pins.gpio3.into_function(),
-        pins.gpio4.into_function(),
-        pins.gpio5.into_function(),
-        delay,
-    )
-    .unwrap();
+    let rs = pins.gpio0.into_push_pull_output();
+    let en = pins.gpio1.into_push_pull_output();
+    let d4 = pins.gpio2.into_push_pull_output();
+    let d5 = pins.gpio3.into_push_pull_output();
+    let d6 = pins.gpio4.into_push_pull_output();
+    let d7 = pins.gpio5.into_push_pull_output();
+
+    let lcd_result = HD44780::new(
+        DisplayOptions4Bit::new(MemoryMap1602::new())
+            .with_pins(FourBitBusPins {
+                rs: rs.into_push_pull_output(), // Register Select pin,
+                en: en.into_push_pull_output(), // Enable pin,
+
+                d4: d4.into_push_pull_output(),  // d4,
+                d5: d5.into_push_pull_output(), // d5,
+                d6: d6.into_push_pull_output(), // d6,
+                d7: d7.into_push_pull_output(), // d7,
+            }),
+        &mut delay,
+    );
+
+    let mut lcd = match lcd_result {
+        Ok(lcd) => lcd,
+        Err(_) => {
+            // Handle the error appropriately here
+            panic!("Failed to initialize the LCD");
+        }
+    };
+
+    lcd.set_cursor_visibility(Cursor::Invisible, &mut delay).unwrap();
+    lcd.set_cursor_blink(CursorBlink::Off, &mut delay).unwrap();
 
     // Set up button up
     let mut up_button = pins.gpio10.into_pull_down_input();
@@ -137,50 +162,29 @@ fn main() -> ! {
     let mut roof_vent = pins.gpio14.into_push_pull_output();
 
     let mut current_screen_index: u8 = 0;
-    let mut wait_time: u16 = 0;
     let mut data: FieldData = FieldData::default(); // TODO Make sure this is set to a valid value before using it
     let mut preferences: Preferences = Preferences::default();
-    // Cooldowns
-    let mut button_cooldown: u8 = 50; // 500ms cooldown
 
     loop {
         delay.delay_ms(10);
 
-        // Tick buttons
-        button_cooldown = tick_buttons(button_cooldown);
-
-        let (update_needed, action) = should_update(
+        let action = should_update(
             &mut up_button,
             &mut down_button,
             &mut select_button,
-            &mut wait_time,
             &mut preferences,
         );
 
-        if update_needed {
             match action {
                 RefreshAction::Up => {
-                    debug(&mut buzzer, delay);
-                    if button_cooldown == 0 {
-                        current_screen_index = next_screen(current_screen_index, true);
-                        button_cooldown = 50;
-                    }
+                    current_screen_index = next_screen(current_screen_index, true);
                 }
                 RefreshAction::Down => {
-                    debug(&mut buzzer, delay);
-                    debug(&mut buzzer, delay);
-                    if button_cooldown == 0 {
-                        current_screen_index = next_screen(current_screen_index, false);
-                        button_cooldown = 50;
-                    }
+                    current_screen_index = next_screen(current_screen_index, false);
                 }
                 RefreshAction::Select => {
-                    debug(&mut buzzer, delay);
-                    debug(&mut buzzer, delay);
-                    debug(&mut buzzer, delay);
                     // Handle SELECT action
-                    if button_cooldown == 0 {
-                        lcd.clear().unwrap();
+                        lcd.clear(&mut delay).unwrap();
                         let mut editing_lower: bool = true;
                         let mut update_date: bool = false;
                         let mut refresh: bool = true;
@@ -198,7 +202,8 @@ fn main() -> ! {
                                                 preferences.temperature.1
                                             )
                                             .unwrap(); // Max str size 7
-                                            render_edit_screen(&info_str, editing_lower, &mut lcd);
+                                            render_edit_screen(&info_str, editing_lower, &mut lcd, &mut delay);
+                                            info_str.clear();
                                             refresh = false;
                                         }
 
@@ -211,10 +216,10 @@ fn main() -> ! {
 
                                         if up_button.is_high().unwrap() {
                                             if editing_lower {
-                                                if preferences.temperature.0 < 1 {
+                                                if preferences.temperature.0 < 100 {
                                                     preferences.temperature.0 += 1;
                                                 }
-                                            } else if preferences.temperature.1 < 1 {
+                                            } else if preferences.temperature.1 < 100 {
                                                 preferences.temperature.1 += 1;
                                             }
                                             refresh = true;
@@ -229,7 +234,7 @@ fn main() -> ! {
                                             refresh = true;
                                         } else if select_button.is_high().unwrap() {
                                             editing_lower = false;
-                                            render_selector(false, 15, &mut lcd);
+                                            render_selector(false, 15, &mut lcd, &mut delay);
 
                                             refresh = true;
                                             break;
@@ -256,7 +261,8 @@ fn main() -> ! {
                                                 preferences.humidity.1
                                             )
                                             .unwrap(); // Max str size 11
-                                            render_edit_screen(&info_str, editing_lower, &mut lcd);
+                                            render_edit_screen(&info_str, editing_lower, &mut lcd, &mut delay);
+                                            info_str.clear();
                                             refresh = false;
                                         }
 
@@ -287,7 +293,7 @@ fn main() -> ! {
                                             refresh = true;
                                         } else if select_button.is_high().unwrap() {
                                             editing_lower = false;
-                                            render_selector(false, 15, &mut lcd);
+                                            render_selector(false, 15, &mut lcd, &mut delay);
                                             refresh = true;
                                             break;
                                         }
@@ -316,6 +322,7 @@ fn main() -> ! {
                                     &mut down_button,
                                     &mut select_button,
                                 );
+                                info_str.clear();
 
                                 render_time_config_screen(
                                     "Hour",
@@ -329,14 +336,15 @@ fn main() -> ! {
                                     &mut down_button,
                                     &mut select_button,
                                 );
-
+                                info_str.clear();
 
                                 // Day
                                 loop {
                                     if refresh {
                                         uwrite!(&mut info_str, "Day: {}", preferences.date.3)
                                             .unwrap(); // Max str size 7
-                                        render_date_edit_screen(&info_str, &mut lcd);
+                                        render_date_edit_screen(&info_str, &mut lcd, &mut delay);
+                                        info_str.clear();
                                         refresh = false;
                                     }
                                     delay.delay_ms(500);
@@ -370,13 +378,15 @@ fn main() -> ! {
                                     &mut down_button,
                                     &mut select_button,
                                 );
+                                info_str.clear();
 
                                 // Year
                                 loop {
                                     if refresh {
                                         uwrite!(&mut info_str, "Year: {}", preferences.date.5)
                                             .unwrap(); // Max str size 10
-                                        render_date_edit_screen(&info_str, &mut lcd);
+                                        render_date_edit_screen(&info_str, &mut lcd, &mut delay);
+                                        info_str.clear();
                                         refresh = false;
                                     }
                                     delay.delay_ms(500);
@@ -401,7 +411,7 @@ fn main() -> ! {
                                     }
                                 }
 
-                                render_selector(false, 7, &mut lcd);
+                                render_selector(false, 7, &mut lcd, &mut delay);
                             }
                             4 => {
                                 let mut remove: bool = false;
@@ -412,6 +422,7 @@ fn main() -> ! {
                                                 &preferences.format_watering_time(),
                                                 index < 2,
                                                 &mut lcd,
+                                                &mut delay,
                                             );
                                             refresh = false;
                                         }
@@ -515,13 +526,12 @@ fn main() -> ! {
                                 // Pressure has no configuration
                             }
                         }
-                    }
                 }
                 _ => {
                     if smoke_detector.is_high().unwrap() {
                         // Panic!!!
                         let roof_open = &roof_vent.is_set_high().unwrap();
-                        render_screen(FIRE, true, &mut lcd);
+                        render_screen(FIRE, true, &mut lcd, &mut delay);
                         while smoke_detector.is_high().unwrap() {
                             // Enable sprinklers
                             sprinklers.set_high().unwrap();
@@ -569,29 +579,27 @@ fn main() -> ! {
                     }
                 }
             }
-        } else {
-            continue;
-        }
 
         let mut data_str: String<12> = String::new();
         match current_screen_index {
             0 => {
                 // Temp
                 uwrite!(&mut data_str, "Temp: {}F", get_temperature(&data)).unwrap(); // Str size 9
-                render_screen(&data_str, true, &mut lcd);
+                render_screen(&data_str, true, &mut lcd, &mut delay);
+                data_str.clear();
                 uwrite!(
                     &mut data_str,
                     "({}, {})",
                     preferences.temperature.0,
                     preferences.temperature.1
-                )
-                .unwrap(); // Str size 8
-                render_screen(&data_str, false, &mut lcd);
+                ).unwrap();
+                render_screen(&data_str, false, &mut lcd, &mut delay);
             }
             1 => {
                 // Humidity
                 uwrite!(&mut data_str, "RH: {}%", get_humidity(&data)).unwrap(); // Str size 8
-                render_screen(&data_str, true, &mut lcd);
+                render_screen(&data_str, true, &mut lcd, &mut delay);
+                data_str.clear();
                 uwrite!(
                     &mut data_str,
                     "({}%, {}%)",
@@ -599,22 +607,22 @@ fn main() -> ! {
                     preferences.humidity.1
                 )
                 .unwrap(); // Str size 12
-                render_screen(&data_str, false, &mut lcd);
+                render_screen(&data_str, false, &mut lcd, &mut delay);
             }
             2 => {
                 // Pressure
                 uwrite!(&mut data_str, "PRS: {} mb", get_pressure(&data)).unwrap(); // Str size 12
-                render_screen(&data_str, true, &mut lcd);
+                render_screen(&data_str, true, &mut lcd, &mut delay);
             }
             3 => {
                 // Date
                 let (time, date) = preferences.get_date_formatted();
-                render_screen(&time, true, &mut lcd);
-                render_screen(&date, false, &mut lcd);
+                render_screen(&time, true, &mut lcd, &mut delay);
+                render_screen(&date, false, &mut lcd, &mut delay);
             }
             _ => {
                 // Water Schedule
-                render_screen(&preferences.format_watering_time(), true, &mut lcd);
+                render_screen(&preferences.format_watering_time(), true, &mut lcd, &mut delay);
             }
         }
     }
@@ -638,37 +646,20 @@ fn should_update(
     up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
-    wait_time: &mut u16,
     preferences: &mut Preferences,
-) -> (bool, RefreshAction) {
-    *wait_time += 1;
-    // Make sure time is kept track of
-    if *wait_time % 100 == 0 {
-        preferences.tick_time();
-    }
+) -> RefreshAction {
+    preferences.tick_time();
 
     // Prioritize button pressing
     if up.is_high().unwrap() {
-        return (true, RefreshAction::Up);
+        RefreshAction::Up
     } else if down.is_high().unwrap() {
-        return (true, RefreshAction::Down);
+        RefreshAction::Down
     } else if select.is_high().unwrap() {
-        return (true, RefreshAction::Select);
+        RefreshAction::Select
+    } else {
+        RefreshAction::Sensor
     }
-
-    // Check if sensors need updated
-    if *wait_time >= 100 {
-        *wait_time = 0; // TODO See if this actually works
-        return (true, RefreshAction::Sensor);
-    }
-    (false, RefreshAction::Sensor) // It's ok to return SENSOR since it gets ignored
-}
-
-/// Ticks the cooldown for buttons
-/// param cooldown: The amount of cooldown left
-/// returns the new value for cooldown
-fn tick_buttons(cooldown: u8) -> u8 {
-    cooldown.saturating_sub(1)
 }
 
 /// Iterates forwards or backwards through Screens
@@ -684,7 +675,14 @@ fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
     current_screen_index
 }
 
-fn debug(mut buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
+fn debug(light: &mut Pin<Gpio13, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
+    light.set_high().unwrap();
+    delay.delay_ms(500);
+    light.set_low().unwrap();
+    delay.delay_ms(500);
+}
+
+fn debug_sound(buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
     buzzer.set_high().unwrap();
     delay.delay_ms(500);
     buzzer.set_low().unwrap();
