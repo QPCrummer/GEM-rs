@@ -31,7 +31,7 @@ use hd44780_driver::setup::DisplayOptions4Bit;
 use heapless::String;
 use i2c_pio::I2C;
 use rp_pico::hal;
-use rp_pico::hal::fugit::RateExtU32;
+use rp_pico::hal::fugit::{RateExtU32};
 use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio13, Gpio6};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
@@ -165,8 +165,8 @@ fn main() -> ! {
     let mut data: FieldData = FieldData::default(); // TODO Make sure this is set to a valid value before using it
     let mut preferences: Preferences = Preferences::default();
 
+
     loop {
-        delay.delay_ms(10);
 
         let action = should_update(
             &mut up_button,

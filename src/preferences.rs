@@ -1,3 +1,4 @@
+use core::time::Duration;
 use ufmt::uwrite;
 use heapless::String;
 
@@ -20,13 +21,14 @@ impl Default for Preferences {
         Preferences {
             temperature: (60, 80),       // Ideal range is 60F - 80F
             humidity: (60, 70),          // Ideal range is 60% - 70%
-            date: (0, 0, 0, 1, 1, 2000), // Date: 00:00:00 Jan 1 2000
+            date: (0, 0, 0, 0, 0, 2000), // Date: 00:00:00 Jan 1 2000
             watering: None,              // No default watering times set
         }
     }
 }
 
 impl Preferences {
+    // TODO Use time instants to better track time
     /// Increments by 1 second
     pub fn tick_time(&mut self) {
         self.date.0 += 1;
@@ -89,17 +91,39 @@ impl Preferences {
         // Format the date as a string
         let mut val1: String<8> = String::new();
         let mut val2: String<10> = String::new();
-        // TODO Find a way to pad numbers <10 with a "0"
-        uwrite!(&mut val1, "{}:{}:{}", self.date.2, self.date.1, self.date.0).unwrap();
+        // Format time
         uwrite!(
-            &mut val2,
-            "{}/{}/{}",
-            self.date.3 + 1,
-            self.date.4 + 1,
-            self.date.5
-        )
-            .unwrap();
+        &mut val1,
+        "{}:{}:{}",
+        Self::pad_number(self.date.2),
+        Self::pad_number(self.date.1),
+        Self::pad_number(self.date.0)
+        ).unwrap();
+
+        // Format date
+        uwrite!(
+        &mut val2,
+        "{}/{}/{}",
+        Self::pad_number(self.date.3 + 1),
+        Self::pad_number(self.date.4 + 1),
+        self.date.5
+        ).unwrap();
+
         (val1, val2)
+    }
+
+    /// Pads a number with a zero before it if < 10
+    /// NOTE: Only supports values <100
+    /// param num: number to be padded
+    /// returns: String with formatted value
+    fn pad_number(num: u8) -> String<2> {
+        let mut padded = String::new();
+        if num < 10 {
+            uwrite!(padded, "0{}", num).unwrap();
+        } else {
+            uwrite!(padded, "{}", num).unwrap();
+        }
+        padded
     }
 
     /// Calculates if it is leap year
@@ -156,14 +180,13 @@ impl Preferences {
     pub fn format_watering_time(&self) -> String<16> {
         let mut str: String<16> = String::new();
         if let Some(watering_time) = self.watering {
-            // TODO Find a way to pad numbers <10 with a "0"
             uwrite!(
                 str,
                 "{}:{} - {}:{}",
-                watering_time.1,
-                watering_time.0,
-                watering_time.3,
-                watering_time.2
+                Self::pad_number(watering_time.1),
+                Self::pad_number(watering_time.0),
+                Self::pad_number(watering_time.3),
+                Self::pad_number(watering_time.2)
             )
                 .unwrap();
         } else {

@@ -14,6 +14,7 @@ cortex-m-rt = "0.7.5"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 i2c-pio = "0.8.0"
 bme680 = { git = "https://github.com/marcelbuesing/bme680" }
+embedded-timers = "0.3.0"
 heapless = { version = "0.8.0", features = ["ufmt"] }
 hd44780-driver = {git = "https://github.com/JohnDoneth/hd44780-driver"}
 ufmt = "0.2.0"
