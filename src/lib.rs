@@ -4,3 +4,4 @@
 pub mod preferences;
 pub mod rendering;
 pub mod sensors;
+pub mod timer;

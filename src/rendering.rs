@@ -78,7 +78,7 @@ pub fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd, 
 pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut Timer) {
     lcd.set_cursor_xy((bottom_pos, 1), delay).unwrap();
     if active {
-        lcd.write_char('■', delay).unwrap();
+        lcd.write_char('█', delay).unwrap();
     } else {
         lcd.write_char(' ', delay).unwrap();
     }
