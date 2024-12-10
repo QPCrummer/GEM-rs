@@ -528,11 +528,11 @@ fn main() -> ! {
                         }
                 }
                 _ => {
-                    if smoke_detector.is_high().unwrap() {
+                    if smoke_detector.is_low().unwrap() {
                         // Panic!!!
                         let roof_open = &roof_vent.is_set_high().unwrap();
                         render_screen(FIRE, true, &mut lcd, &mut delay);
-                        while smoke_detector.is_high().unwrap() {
+                        while smoke_detector.is_low().unwrap() {
                             // Enable sprinklers
                             sprinklers.set_high().unwrap();
                             // Ensure windows are closed
