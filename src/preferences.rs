@@ -1,4 +1,3 @@
-use core::time::Duration;
 use ufmt::uwrite;
 use heapless::String;
 
@@ -95,17 +94,17 @@ impl Preferences {
         uwrite!(
         &mut val1,
         "{}:{}:{}",
-        Self::pad_number(self.date.2),
-        Self::pad_number(self.date.1),
-        Self::pad_number(self.date.0)
+        Self::pad_number(self.date.2).as_str(),
+        Self::pad_number(self.date.1).as_str(),
+        Self::pad_number(self.date.0).as_str(),
         ).unwrap();
 
         // Format date
         uwrite!(
         &mut val2,
         "{}/{}/{}",
-        Self::pad_number(self.date.3 + 1),
-        Self::pad_number(self.date.4 + 1),
+        Self::pad_number(self.date.3 + 1).as_str(),
+        Self::pad_number(self.date.4 + 1).as_str(),
         self.date.5
         ).unwrap();
 
@@ -183,10 +182,10 @@ impl Preferences {
             uwrite!(
                 str,
                 "{}:{} - {}:{}",
-                Self::pad_number(watering_time.1),
-                Self::pad_number(watering_time.0),
-                Self::pad_number(watering_time.3),
-                Self::pad_number(watering_time.2)
+                Self::pad_number(watering_time.1).as_str(),
+                Self::pad_number(watering_time.0).as_str(),
+                Self::pad_number(watering_time.3).as_str(),
+                Self::pad_number(watering_time.2).as_str(),
             )
                 .unwrap();
         } else {

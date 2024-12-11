@@ -32,15 +32,14 @@ use heapless::String;
 use i2c_pio::I2C;
 use rp_pico::hal;
 use rp_pico::hal::fugit::{RateExtU32};
-use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio13, Gpio6};
-use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
+use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12};
+use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput};
 use rp_pico::hal::pio::PIOExt;
-use rp_pico::hal::timer::CountDown;
 use ufmt::uwrite;
 use greenhouse_rs::preferences::Preferences;
 use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
 use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
-use greenhouse_rs::timer::{countdown_ended, start_countdown, CountdownDelay};
+use greenhouse_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
 
 const FIRE: &str = "Fire Present";
 
@@ -81,9 +80,10 @@ fn main() -> ! {
 
     // Set up delays
     let mut delay = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    let mut button_countdown = delay.count_down();
-    let mut sensor_countdown = delay.count_down();
-    let mut edit_button_countdown = delay.count_down();
+    let mut button_countdown = CountDownTimer::new(0);
+    let mut sensor_countdown = CountDownTimer::new(0);
+    let mut edit_button_countdown = CountDownTimer::new(0);
+    let mut time_countdown = CountDownTimer::new(0);
 
     let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
@@ -173,6 +173,8 @@ fn main() -> ! {
 
 
     loop {
+        // Delay loop
+        delay.delay_ms(1);
 
         let action = should_update(
             &mut up_button,
@@ -181,6 +183,7 @@ fn main() -> ! {
             &mut preferences,
             &mut button_countdown,
             &mut sensor_countdown,
+            &mut time_countdown,
         );
 
             match action {
@@ -662,29 +665,37 @@ fn should_update(
     down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
     preferences: &mut Preferences,
-    button_cd: &CountDown,
-    sensor_cd: &CountDown,
+    button_cd: &mut CountDownTimer,
+    sensor_cd: &mut CountDownTimer,
+    time_cd: &mut CountDownTimer,
 ) -> RefreshAction {
-    preferences.tick_time();
+    // Tick
+    time_cd.tick();
+    if time_cd.is_finished() {
+        preferences.tick_time();
+        time_cd.set_time(TICK_TIME_DELAY);
+    }
+    button_cd.tick();
+    sensor_cd.tick();
 
     // Only tick buttons if they aren't on delay
-    if countdown_ended(CountdownDelay::ScreenButtonDelay, button_cd) {
+    if button_cd.is_finished() {
         if up.is_high().unwrap() {
-            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
-            return RefreshAction::Up
+            button_cd.set_time(SCREEN_BUTTON_DELAY);
+            return RefreshAction::Up;
         } else if down.is_high().unwrap() {
-            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
-            return RefreshAction::Down
+            button_cd.set_time(SCREEN_BUTTON_DELAY);
+            return RefreshAction::Down;
         } else if select.is_high().unwrap() {
-            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
-            return RefreshAction::Select
+            button_cd.set_time(SCREEN_BUTTON_DELAY);
+            return RefreshAction::Select;
         }
     }
 
     // Only tick sensors if they aren't on delay
-    if countdown_ended(CountdownDelay::SensorDelay, sensor_cd) {
-        start_countdown(CountdownDelay::SensorDelay, sensor_cd);
-        return RefreshAction::Sensor
+    if sensor_cd.is_finished() {
+        sensor_cd.set_time(SENSOR_DELAY);
+        return RefreshAction::Sensor;
     }
 
     // If there is nothing to tick, then return None

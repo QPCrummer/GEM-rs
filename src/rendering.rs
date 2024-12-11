@@ -71,16 +71,16 @@ pub fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd, 
     render_selector(true, 7, lcd, delay);
 }
 
-/// Renders a ■ on the bottom line at the specified position
-/// param active: whether to add or remove a ■
+/// Renders a ^ on the bottom line at the specified position
+/// param active: whether to add or remove a ^
 /// param bottom_pos: the x-coordinate
 /// param lcd: LCD instance
 pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut Timer) {
     lcd.set_cursor_xy((bottom_pos, 1), delay).unwrap();
     if active {
-        lcd.write_char('█', delay).unwrap();
+        lcd.write_str("^", delay).unwrap();
     } else {
-        lcd.write_char(' ', delay).unwrap();
+        lcd.write_str(" ", delay).unwrap();
     }
 }
 
@@ -115,6 +115,7 @@ pub fn render_time_config_screen(
             uwrite!(info_str, "{}: {}", unit, preference)
                 .unwrap(); // Max str size 10
             render_date_edit_screen(&info_str, lcd, delay);
+            info_str.clear();
             refresh = false;
         }
 

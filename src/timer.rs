@@ -1,47 +1,32 @@
-use rp_pico::hal::fugit::ExtU32;
-use rp_pico::hal::timer::CountDown;
-
 use panic_probe as _;
 
-pub enum CountdownDelay {
-    ScreenButtonDelay,
-    EditButtonDelay,
-    SensorDelay,
+pub struct CountDownTimer {
+    target_ms: u16,
 }
 
-/// Starts the countdown for the specified CountdownDelay
-/// ScreenButtonDelay: 500ms
-/// EditButtonDelay: 200ms
-/// SensorDelay: 4s
-/// param countdown_type: CountdownDelay instance
-/// param countdown: CountDown instance
-pub fn start_countdown(countdown_type: CountdownDelay, mut countdown: &CountDown) {
-    match countdown_type {
-        CountdownDelay::ScreenButtonDelay() => countdown.start(500.millis()),
-        CountdownDelay::EditButtonDelay() => countdown.start(200.millis()),
-        CountdownDelay::SensorDelay() => countdown.start(4.secs()),
-    }
-}
+pub const SCREEN_BUTTON_DELAY: u16 = 500; // 500ms ideally
+pub const EDIT_BUTTON_DELAY: u16 = 200; // 200ms ideally
+pub const TICK_TIME_DELAY: u16 = 1000;
+pub const SENSOR_DELAY: u16 = 2000; // 2000ms ideally
 
-/// Detects if the specified CountdownDelay is finished
-/// param countdown_type: CountdownDelay instance
-/// /// param countdown: CountDown instance
-/// returns if the CountdownDelay is not counting
-pub fn countdown_ended(countdown_type: CountdownDelay, mut countdown: &CountDown) -> bool {
-    match countdown_type {
-        CountdownDelay::ScreenButtonDelay
-        | CountdownDelay::EditButtonDelay
-        | CountdownDelay::SensorDelay => is_finished(&mut countdown),
-    }
-}
-
-fn is_finished(countdown: &mut CountDown) -> bool {
-    match countdown.wait() {
-        Err(nb::Error::WouldBlock) => {
-            false
+impl CountDownTimer {
+    pub fn new(target_ms: u16) -> CountDownTimer {
+        Self {
+            target_ms,
         }
-        _ => {
-            true
+    }
+
+    pub fn tick(&mut self) {
+        if self.target_ms > 0 {
+            self.target_ms -= 1;
         }
+    }
+
+    pub fn set_time(&mut self, ms: u16) {
+        self.target_ms = ms;
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.target_ms == 0
     }
 }
