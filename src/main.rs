@@ -35,10 +35,12 @@ use rp_pico::hal::fugit::{RateExtU32};
 use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12, Gpio13, Gpio6};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::pio::PIOExt;
+use rp_pico::hal::timer::CountDown;
 use ufmt::uwrite;
 use greenhouse_rs::preferences::Preferences;
 use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
 use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
+use greenhouse_rs::timer::{countdown_ended, start_countdown, CountdownDelay};
 
 const FIRE: &str = "Fire Present";
 
@@ -77,7 +79,11 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
+    // Set up delays
     let mut delay = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let mut button_countdown = delay.count_down();
+    let mut sensor_countdown = delay.count_down();
+    let mut edit_button_countdown = delay.count_down();
 
     let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
 
@@ -173,6 +179,8 @@ fn main() -> ! {
             &mut down_button,
             &mut select_button,
             &mut preferences,
+            &mut button_countdown,
+            &mut sensor_countdown,
         );
 
             match action {
@@ -527,7 +535,7 @@ fn main() -> ! {
                             }
                         }
                 }
-                _ => {
+                RefreshAction::Sensor => {
                     if smoke_detector.is_low().unwrap() {
                         // Panic!!!
                         let roof_open = &roof_vent.is_set_high().unwrap();
@@ -577,6 +585,10 @@ fn main() -> ! {
                     } else {
                         sprinklers.set_low().unwrap();
                     }
+                }
+                _ => {
+                    // Nothing is needed to do, so just continue
+                    continue;
                 }
             }
 
@@ -633,6 +645,7 @@ enum RefreshAction {
     Down,
     Select,
     Sensor,
+    None,
 }
 
 /// Whether to update the LCD
@@ -641,50 +654,47 @@ enum RefreshAction {
 /// param select: Selection Button
 /// param wait_time: The amount of time between sensor polling
 /// param preferences: Client Preferences
+/// param button_cd: button countdown
+/// param sensor_cd: sensor countdown
 /// returns: if the LCD needs an update
 fn should_update(
     up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
     preferences: &mut Preferences,
+    button_cd: &CountDown,
+    sensor_cd: &CountDown,
 ) -> RefreshAction {
     preferences.tick_time();
 
-    // Prioritize button pressing
-    if up.is_high().unwrap() {
-        RefreshAction::Up
-    } else if down.is_high().unwrap() {
-        RefreshAction::Down
-    } else if select.is_high().unwrap() {
-        RefreshAction::Select
-    } else {
-        RefreshAction::Sensor
+    // Only tick buttons if they aren't on delay
+    if countdown_ended(CountdownDelay::ScreenButtonDelay, button_cd) {
+        if up.is_high().unwrap() {
+            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
+            return RefreshAction::Up
+        } else if down.is_high().unwrap() {
+            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
+            return RefreshAction::Down
+        } else if select.is_high().unwrap() {
+            start_countdown(CountdownDelay::ScreenButtonDelay, button_cd);
+            return RefreshAction::Select
+        }
     }
+
+    // Only tick sensors if they aren't on delay
+    if countdown_ended(CountdownDelay::SensorDelay, sensor_cd) {
+        start_countdown(CountdownDelay::SensorDelay, sensor_cd);
+        return RefreshAction::Sensor
+    }
+
+    // If there is nothing to tick, then return None
+    RefreshAction::None
 }
 
 /// Iterates forwards or backwards through Screens
-/// param current_screen: The current screen being displayed
+/// param current_screen_index: The current screen being displayed
 /// param next: Whether to iterate forward; If false, iterate backwards
 /// returns: The next Screen
-fn next_screen(mut current_screen_index: u8, next: bool) -> u8 {
-    if next {
-        current_screen_index = (current_screen_index + 1) % 5;
-    } else {
-        current_screen_index = (current_screen_index + 5 - 1) % 5;
-    }
-    current_screen_index
-}
-
-fn debug(light: &mut Pin<Gpio13, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
-    light.set_high().unwrap();
-    delay.delay_ms(500);
-    light.set_low().unwrap();
-    delay.delay_ms(500);
-}
-
-fn debug_sound(buzzer: &mut Pin<Gpio6, FunctionSio<SioOutput>, PullDown>, mut delay: Timer) {
-    buzzer.set_high().unwrap();
-    delay.delay_ms(500);
-    buzzer.set_low().unwrap();
-    delay.delay_ms(500);
+fn next_screen(current_screen_index: u8, next: bool) -> u8 {
+    (current_screen_index + if next { 1 } else { 4 }) % 5
 }
