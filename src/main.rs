@@ -37,7 +37,7 @@ use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
 use greenhouse_rs::preferences::Preferences;
-use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen};
+use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen, render_watering_edit_screen};
 use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 use greenhouse_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
 
@@ -429,9 +429,9 @@ fn main() -> ! {
                                 for index in 0..4 {
                                     loop {
                                         if refresh {
-                                            render_edit_screen(
+                                            render_watering_edit_screen(
                                                 &preferences.format_watering_time(),
-                                                index < 2,
+                                                index,
                                                 &mut lcd,
                                                 &mut delay,
                                             );
@@ -455,57 +455,25 @@ fn main() -> ! {
                                         if up_button.is_high().unwrap() {
                                             if preferences.watering.is_none() {
                                                 preferences.set_default_watering_time();
-                                            } else {
+                                            } else if let Some((ref mut min_low, ref mut hr_low, ref mut min_high, ref mut hr_high)) = preferences.watering {
                                                 match index {
-                                                    0 => {
-                                                        preferences.watering.unwrap().1 =
-                                                            (preferences.watering.unwrap().1 + 1)
-                                                                % 24;
-                                                    }
-                                                    1 => {
-                                                        preferences.watering.unwrap().0 =
-                                                            (preferences.watering.unwrap().0 + 1)
-                                                                % 60;
-                                                    }
-                                                    2 => {
-                                                        preferences.watering.unwrap().3 =
-                                                            (preferences.watering.unwrap().3 + 1)
-                                                                % 24;
-                                                    }
-                                                    3 => {
-                                                        preferences.watering.unwrap().2 =
-                                                            (preferences.watering.unwrap().2 + 1)
-                                                                % 60;
-                                                    }
+                                                    0 => *hr_low = (*hr_low + 1) % 24,
+                                                    1 => *min_low = (*min_low + 1) % 60,
+                                                    2 => *hr_high = (*hr_high + 1) % 24,
+                                                    3 => *min_high = (*min_high + 1) % 60,
                                                     _ => {}
                                                 }
                                             }
                                             refresh = true;
+
                                         } else if down_button.is_high().unwrap() {
                                             if preferences.watering.is_none() {
                                                 preferences.set_default_watering_time();
-                                            } else {
+                                            } else if let Some((ref mut min_low, ref mut hr_low, ref mut min_high, ref mut hr_high)) = preferences.watering {
                                                 match index {
-                                                    0 => {
-                                                        preferences.watering.unwrap().1 =
-                                                            (preferences.watering.unwrap().1 + 23)
-                                                                % 24;
-                                                    }
-                                                    1 => {
-                                                        preferences.watering.unwrap().0 =
-                                                            (preferences.watering.unwrap().0 + 59)
-                                                                % 60;
-                                                    }
-                                                    2 => {
-                                                        preferences.watering.unwrap().3 =
-                                                            (preferences.watering.unwrap().3 + 23)
-                                                                % 24;
-                                                    }
-                                                    3 => {
-                                                        preferences.watering.unwrap().2 =
-                                                            (preferences.watering.unwrap().2 + 59)
-                                                                % 60;
-                                                    }
+                                                    0 => *hr_low = (*hr_low + 23) % 24,
+                                                    2 => *hr_high = (*hr_high + 23) % 24,
+                                                    3 => *min_high = (*min_high + 59) % 60,
                                                     _ => {}
                                                 }
                                             }
@@ -531,6 +499,8 @@ fn main() -> ! {
                                         preferences.watering.unwrap().0,
                                         preferences.watering.unwrap().1,
                                     ));
+                                } else {
+                                    preferences.watering = None;
                                 }
                             }
                             _ => {
@@ -599,7 +569,7 @@ fn main() -> ! {
         match current_screen_index {
             0 => {
                 // Temp
-                uwrite!(&mut data_str, "Temp: {}F", get_temperature(&data)).unwrap(); // Str size 9
+                uwrite!(&mut data_str, "Temp: {}F", get_temperature(&data)).unwrap();
                 render_screen(&data_str, true, &mut lcd, &mut delay);
                 data_str.clear();
                 uwrite!(
@@ -612,7 +582,7 @@ fn main() -> ! {
             }
             1 => {
                 // Humidity
-                uwrite!(&mut data_str, "RH: {}%", get_humidity(&data)).unwrap(); // Str size 8
+                uwrite!(&mut data_str, "RH: {}%", get_humidity(&data)).unwrap();
                 render_screen(&data_str, true, &mut lcd, &mut delay);
                 data_str.clear();
                 uwrite!(
@@ -626,7 +596,7 @@ fn main() -> ! {
             }
             2 => {
                 // Pressure
-                uwrite!(&mut data_str, "PRS: {} mb", get_pressure(&data)).unwrap(); // Str size 12
+                uwrite!(&mut data_str, "PRS: {} mb", get_pressure(&data)).unwrap();
                 render_screen(&data_str, true, &mut lcd, &mut delay);
             }
             3 => {

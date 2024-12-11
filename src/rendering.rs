@@ -35,10 +35,11 @@ pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd, delay: &mut Time
     lcd.write_str(line, delay).unwrap();
 }
 
-/// Renders the Preferences on screen with a blinking indicator cursor
+/// Renders the Preferences on screen with an indicator cursor
 /// param line: The preferences line
 /// param left_cursor: If the lower bound is selected
 /// param lcd: LCD instance
+/// param delay: Timer instance
 pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd, delay: &mut Timer) {
     // Clear
     lcd.clear(delay).unwrap();
@@ -53,6 +54,39 @@ pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, l
     } else {
         render_selector(false, 0, lcd, delay);
         render_selector(true, 15, lcd, delay);
+    }
+}
+
+/// Renders the Preferences watering editing screen with an indicator cursor
+/// param line: The preferences line
+/// param index: If index of the element being edited
+/// param lcd: LCD instance
+/// param delay: Timer instance
+pub fn render_watering_edit_screen<const N: usize>(line: &String<N>, index: i32, lcd: &mut Lcd, delay: &mut Timer) {
+    // Clear
+    lcd.clear(delay).unwrap();
+
+    // Write top info
+    lcd.set_cursor_pos(0, delay).unwrap();
+    lcd.write_str(line, delay).unwrap();
+
+    // Create selection cursor
+    match index {
+        1 => {
+            render_selector(false, 0, lcd, delay);
+            render_selector(true, 3, lcd, delay);
+        }
+        0 => {
+            render_selector(true, 0, lcd, delay);
+        }
+        3 => {
+            render_selector(false, 8, lcd, delay);
+            render_selector(true, 11, lcd, delay);
+        }
+        _ => { // 2
+            render_selector(false, 3, lcd, delay);
+            render_selector(true, 8, lcd, delay);
+        }
     }
 }
 
