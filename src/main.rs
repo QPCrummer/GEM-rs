@@ -159,7 +159,7 @@ fn main() -> ! {
     let mut buzzer = pins.gpio6.into_push_pull_output();
 
     // Set up smoke detector
-    let mut smoke_detector = pins.gpio7.into_pull_up_input();
+    let mut smoke_detector = pins.gpio7.into_pull_down_input();
 
     // Set up sprinklers
     let mut sprinklers = pins.gpio13.into_push_pull_output();
@@ -472,6 +472,7 @@ fn main() -> ! {
                                             } else if let Some((ref mut min_low, ref mut hr_low, ref mut min_high, ref mut hr_high)) = preferences.watering {
                                                 match index {
                                                     0 => *hr_low = (*hr_low + 23) % 24,
+                                                    1 => *min_low = (*min_low + 59) % 60,
                                                     2 => *hr_high = (*hr_high + 23) % 24,
                                                     3 => *min_high = (*min_high + 59) % 60,
                                                     _ => {}
@@ -509,11 +510,11 @@ fn main() -> ! {
                         }
                 }
                 RefreshAction::Sensor => {
-                    if smoke_detector.is_low().unwrap() {
+                    if smoke_detector.is_high().unwrap() {
                         // Panic!!!
                         let roof_open = &roof_vent.is_set_high().unwrap();
                         render_screen(FIRE, true, &mut lcd, &mut delay);
-                        while smoke_detector.is_low().unwrap() {
+                        while smoke_detector.is_high().unwrap() {
                             // Enable sprinklers
                             sprinklers.set_high().unwrap();
                             // Ensure windows are closed
