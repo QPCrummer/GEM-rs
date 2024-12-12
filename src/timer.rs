@@ -5,7 +5,6 @@ pub struct CountDownTimer {
 }
 
 pub const SCREEN_BUTTON_DELAY: u16 = 500; // 500ms ideally
-pub const EDIT_BUTTON_DELAY: u16 = 200; // 200ms ideally
 pub const TICK_TIME_DELAY: u16 = 1000;
 pub const SENSOR_DELAY: u16 = 2000; // 2000ms ideally
 

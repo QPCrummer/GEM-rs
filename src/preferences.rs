@@ -20,7 +20,7 @@ impl Default for Preferences {
         Preferences {
             temperature: (60, 80),       // Ideal range is 60F - 80F
             humidity: (60, 70),          // Ideal range is 60% - 70%
-            date: (0, 0, 0, 0, 0, 2000), // Date: 00:00:00 Jan 1 2000
+            date: (0, 0, 0, 1, 1, 2000), // Date: 00:00:00 Jan 1 2000
             watering: None,              // No default watering times set
         }
     }
@@ -136,17 +136,12 @@ impl Preferences {
     /// returns the next day's index
     pub fn change_days(&self, increment: bool) -> u8 {
         let days_in_month: u8 = self.get_days_in_month();
-
-        if increment {
-            (self.date.3 + 1) % days_in_month
-        } else {
-            (self.date.3 + (days_in_month - 1)) % days_in_month
-        }
+        inclusive_iterator(self.date.3, 1, days_in_month, increment)
     }
 
     /// Gets the amount of days in the current month
     /// returns the amount of days in the month
-    fn get_days_in_month(&self) -> u8 {
+    pub fn get_days_in_month(&self) -> u8 {
         match self.date.4 {
             2 => {
                 if Self::is_leap_year(self.date.5) {
@@ -197,5 +192,27 @@ impl Preferences {
     /// Sets the watering time from 00:00 to 01:00
     pub fn set_default_watering_time(&mut self) {
         self.watering = Some((0, 0, 0, 1));
+    }
+}
+
+/// Increments or decrements by 1 through a list of integers
+/// param current_val: the current value
+/// param min_val: the minimum included value
+/// param max_val: the maximum included value
+/// param increment: whether to iterate forwards
+/// returns the next integer in the sequence
+pub fn inclusive_iterator(current_val: u8, min_val: u8, max_val: u8, increment: bool) -> u8 {
+    if increment {
+        if current_val == max_val {
+            min_val
+        } else {
+            current_val + 1
+        }
+    } else {
+        if current_val == min_val {
+            max_val
+        } else {
+            current_val - 1
+        }
     }
 }

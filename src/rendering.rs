@@ -9,7 +9,7 @@ use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpi
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::Timer;
 use ufmt::uwrite;
-use crate::preferences::Preferences;
+use crate::preferences::{inclusive_iterator, Preferences};
 
 use panic_probe as _;
 
@@ -79,13 +79,13 @@ pub fn render_watering_edit_screen<const N: usize>(line: &String<N>, index: i32,
         0 => {
             render_selector(true, 0, lcd, delay);
         }
-        3 => {
-            render_selector(false, 8, lcd, delay);
-            render_selector(true, 11, lcd, delay);
-        }
-        _ => { // 2
+        2 => {
             render_selector(false, 3, lcd, delay);
             render_selector(true, 8, lcd, delay);
+        }
+        _ => {
+            render_selector(false, 8, lcd, delay);
+            render_selector(true, 11, lcd, delay);
         }
     }
 }
@@ -121,7 +121,8 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut 
 /// Renders configuration screens for various parts of the date system
 /// param unit: The current unit; Ex: Minutes
 /// param info_str: String<N> for data
-/// param modulo: The range for the unit; Ex: 60 for Minutes
+/// param min: The minimum value for the unit
+/// param max: The maximum value for the unit
 /// param preference: Current variable being assigned
 /// param preferences: Preferences instance
 /// param lcd: LCD instance
@@ -129,18 +130,21 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut 
 /// param up_button: Up button instance
 /// param down_button: Down button instance
 /// param select_button: Select button instance
+/// returns the inputted preference value after modification
+#[allow(clippy::too_many_arguments)]
 pub fn render_time_config_screen(
     unit: &str,
     info_str: &mut String<11>,
-    modulo: u16,
-    preference: &mut u16,
+    min: u8,
+    max: u8,
+    mut preference: u8,
     preferences: &mut Preferences,
     lcd: &mut Lcd,
     delay: &mut Timer,
     up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
-)
+) -> u8
 {
     let mut refresh: bool = true;
     let mut update_date: bool = false;
@@ -148,7 +152,7 @@ pub fn render_time_config_screen(
         if refresh {
             uwrite!(info_str, "{}: {}", unit, preference)
                 .unwrap(); // Max str size 10
-            render_date_edit_screen(&info_str, lcd, delay);
+            render_date_edit_screen(info_str, lcd, delay);
             info_str.clear();
             refresh = false;
         }
@@ -161,13 +165,14 @@ pub fn render_time_config_screen(
         update_date = !update_date;
 
         if up_button.is_high().unwrap() {
-            *preference = (*preference + 1) % modulo;
+            preference = inclusive_iterator(preference, min, max, true);
             refresh = true;
         } else if down_button.is_high().unwrap() {
-            *preference = (*preference + (modulo - 1)) % modulo;
+            preference = inclusive_iterator(preference, min, max, false);
             refresh = true;
         } else if select_button.is_high().unwrap() {
             break;
         }
     }
+    preference
 }

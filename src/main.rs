@@ -82,7 +82,6 @@ fn main() -> ! {
     let mut delay = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
     let mut button_countdown = CountDownTimer::new(0);
     let mut sensor_countdown = CountDownTimer::new(0);
-    let mut edit_button_countdown = CountDownTimer::new(0);
     let mut time_countdown = CountDownTimer::new(0);
 
     let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
@@ -212,7 +211,7 @@ fn main() -> ! {
                                                 preferences.temperature.0,
                                                 preferences.temperature.1
                                             )
-                                            .unwrap(); // Max str size 7
+                                            .unwrap();
                                             render_edit_screen(&info_str, editing_lower, &mut lcd, &mut delay);
                                             info_str.clear();
                                             refresh = false;
@@ -271,7 +270,7 @@ fn main() -> ! {
                                                 preferences.humidity.0,
                                                 preferences.humidity.1
                                             )
-                                            .unwrap(); // Max str size 11
+                                            .unwrap();
                                             render_edit_screen(&info_str, editing_lower, &mut lcd, &mut delay);
                                             info_str.clear();
                                             refresh = false;
@@ -321,11 +320,12 @@ fn main() -> ! {
                             3 => {
                                 // Date
 
-                                render_time_config_screen(
+                                preferences.date.1 = render_time_config_screen(
                                     "Minute",
                                     &mut info_str,
-                                    60,
-                                    &mut (preferences.date.1 as u16),
+                                    0,
+                                    59,
+                                    preferences.date.1,
                                     &mut preferences,
                                     &mut lcd,
                                     &mut delay,
@@ -335,11 +335,12 @@ fn main() -> ! {
                                 );
                                 info_str.clear();
 
-                                render_time_config_screen(
+                                preferences.date.2 = render_time_config_screen(
                                     "Hour",
                                     &mut info_str,
-                                    24,
-                                    &mut (preferences.date.2 as u16),
+                                    0,
+                                    23,
+                                    preferences.date.2,
                                     &mut preferences,
                                     &mut lcd,
                                     &mut delay,
@@ -349,39 +350,27 @@ fn main() -> ! {
                                 );
                                 info_str.clear();
 
-                                // Day
-                                loop {
-                                    if refresh {
-                                        uwrite!(&mut info_str, "Day: {}", preferences.date.3)
-                                            .unwrap(); // Max str size 7
-                                        render_date_edit_screen(&info_str, &mut lcd, &mut delay);
-                                        info_str.clear();
-                                        refresh = false;
-                                    }
-                                    delay.delay_ms(500);
+                                preferences.date.3 = render_time_config_screen(
+                                    "Day",
+                                    &mut info_str,
+                                    1,
+                                    preferences.get_days_in_month(),
+                                    preferences.date.3,
+                                    &mut preferences,
+                                    &mut lcd,
+                                    &mut delay,
+                                    &mut up_button,
+                                    &mut down_button,
+                                    &mut select_button,
+                                );
+                                info_str.clear();
 
-                                    if update_date {
-                                        preferences.tick_time();
-                                    }
-                                    update_date = !update_date;
-
-                                    if up_button.is_high().unwrap() {
-                                        preferences.date.3 = preferences.change_days(true);
-                                        refresh = true;
-                                    } else if down_button.is_high().unwrap() {
-                                        preferences.date.3 = preferences.change_days(false);
-                                        refresh = true;
-                                    } else if select_button.is_high().unwrap() {
-                                        refresh = true;
-                                        break;
-                                    }
-                                }
-
-                                render_time_config_screen(
+                                preferences.date.4 = render_time_config_screen(
                                     "Month",
                                     &mut info_str,
+                                    1,
                                     12,
-                                    &mut (preferences.date.4 as u16),
+                                    preferences.date.4,
                                     &mut preferences,
                                     &mut lcd,
                                     &mut delay,
@@ -395,7 +384,7 @@ fn main() -> ! {
                                 loop {
                                     if refresh {
                                         uwrite!(&mut info_str, "Year: {}", preferences.date.5)
-                                            .unwrap(); // Max str size 10
+                                            .unwrap();
                                         render_date_edit_screen(&info_str, &mut lcd, &mut delay);
                                         info_str.clear();
                                         refresh = false;
@@ -408,8 +397,7 @@ fn main() -> ! {
                                     update_date = !update_date;
 
                                     if up_button.is_high().unwrap() {
-                                        // I'm going to assume that no one is stupid enough
-                                        // to actually hit the u16 integer limit
+                                        // Assuming the integer limit cannot be reached
                                         preferences.date.5 += 1;
                                         refresh = true;
                                     } else if down_button.is_high().unwrap() {
@@ -420,6 +408,11 @@ fn main() -> ! {
                                     } else if select_button.is_high().unwrap() {
                                         break;
                                     }
+                                }
+                                
+                                // Validate day
+                                if preferences.date.3 > preferences.get_days_in_month() {
+                                    preferences.date.3 = preferences.get_days_in_month();
                                 }
 
                                 render_selector(false, 7, &mut lcd, &mut delay);
@@ -489,19 +482,17 @@ fn main() -> ! {
                                     }
                                 }
                                 // Check legality
-                                if !remove
-                                    && ((preferences.watering.unwrap().1 > preferences.watering.unwrap().3) || // Hours are incorrect
-                                        (preferences.watering.unwrap().1 == preferences.watering.unwrap().3 && // Minutes are incorrect assuming hours are equal
-                                            preferences.watering.unwrap().0 > preferences.watering.unwrap().2))
-                                {
+                                if remove {
+                                    preferences.watering = None;
+                                } else if (preferences.watering.unwrap().1 > preferences.watering.unwrap().3) || // Hours are incorrect
+                                    (preferences.watering.unwrap().1 == preferences.watering.unwrap().3 && // Minutes are incorrect assuming hours are equal
+                                        preferences.watering.unwrap().0 > preferences.watering.unwrap().2) {
                                     preferences.watering = Some((
                                         preferences.watering.unwrap().2,
                                         preferences.watering.unwrap().3,
                                         preferences.watering.unwrap().0,
                                         preferences.watering.unwrap().1,
                                     ));
-                                } else {
-                                    preferences.watering = None;
                                 }
                             }
                             _ => {
@@ -537,7 +528,7 @@ fn main() -> ! {
 
                     // Check if temperature is valid
                     let temp = get_temperature(&data);
-                    if temp < preferences.temperature.0 || temp > preferences.temperature.1 {
+                    if temp > preferences.temperature.1 {
                         // open vent
                         roof_vent.set_high().unwrap();
                     } else {
@@ -592,7 +583,7 @@ fn main() -> ! {
                     preferences.humidity.0,
                     preferences.humidity.1
                 )
-                .unwrap(); // Str size 12
+                .unwrap();
                 render_screen(&data_str, false, &mut lcd, &mut delay);
             }
             2 => {
