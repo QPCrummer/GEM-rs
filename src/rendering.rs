@@ -1,22 +1,30 @@
+use crate::preferences::{inclusive_iterator, Preferences};
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::InputPin;
 use hd44780_driver::bus::FourBitBus;
 use hd44780_driver::charset::{CharsetUniversal, EmptyFallback};
-use hd44780_driver::HD44780;
 use hd44780_driver::memory_map::StandardMemoryMap;
+use hd44780_driver::HD44780;
 use heapless::String;
 use rp_pico::hal::gpio::bank0::{Gpio0, Gpio1, Gpio10, Gpio11, Gpio12, Gpio2, Gpio3, Gpio4, Gpio5};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
 use rp_pico::hal::Timer;
 use ufmt::uwrite;
-use crate::preferences::{inclusive_iterator, Preferences};
 
 use panic_probe as _;
 
-pub type Lcd =  HD44780<FourBitBus<Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
-    Pin<Gpio5, FunctionSio<SioOutput>, PullDown>>, StandardMemoryMap<16, 2>, EmptyFallback<CharsetUniversal>>;
+pub type Lcd = HD44780<
+    FourBitBus<
+        Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio1, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio3, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
+        Pin<Gpio5, FunctionSio<SioOutput>, PullDown>,
+    >,
+    StandardMemoryMap<16, 2>,
+    EmptyFallback<CharsetUniversal>,
+>;
 
 /// Basic function for rendering text onto the LCD.
 /// It only clears the screen when the top line is written to
@@ -42,7 +50,12 @@ pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd, delay: &mut Time
 /// - param left_cursor: If the lower bound is selected
 /// - param lcd: [Lcd] instance
 /// - param delay: [Timer] instance
-pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd, delay: &mut Timer) {
+pub fn render_edit_screen<const N: usize>(
+    line: &String<N>,
+    left_cursor: bool,
+    lcd: &mut Lcd,
+    delay: &mut Timer,
+) {
     // Clear
     lcd.clear(delay).unwrap();
 
@@ -65,7 +78,12 @@ pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, l
 /// - param index: If index of the element being edited
 /// - param lcd: [Lcd] instance
 /// - param delay: Timer instance
-pub fn render_watering_edit_screen<const N: usize>(line: &String<N>, index: i32, lcd: &mut Lcd, delay: &mut Timer) {
+pub fn render_watering_edit_screen<const N: usize>(
+    line: &String<N>,
+    index: i32,
+    lcd: &mut Lcd,
+    delay: &mut Timer,
+) {
     // Clear
     lcd.clear(delay).unwrap();
 
@@ -180,14 +198,12 @@ pub fn render_time_config_screen(
     up_button: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
     down_button: &mut Pin<Gpio11, FunctionSio<SioInput>, PullDown>,
     select_button: &mut Pin<Gpio12, FunctionSio<SioInput>, PullDown>,
-) -> u8
-{
+) -> u8 {
     let mut refresh: bool = true;
     let mut update_date: bool = false;
     loop {
         if refresh {
-            uwrite!(info_str, "{}: {}", unit, preference)
-                .unwrap();
+            uwrite!(info_str, "{}: {}", unit, preference).unwrap();
             render_date_edit_screen(info_str, lcd, delay);
             info_str.clear();
             refresh = false;

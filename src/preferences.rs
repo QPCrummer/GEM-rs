@@ -1,5 +1,5 @@
-use ufmt::uwrite;
 use heapless::String;
+use ufmt::uwrite;
 
 use panic_probe as _;
 
@@ -94,21 +94,23 @@ impl Preferences {
         let mut val2: String<10> = String::new();
         // Format time
         uwrite!(
-        &mut val1,
-        "{}:{}:{}",
-        Self::pad_number(self.date.2).as_str(),
-        Self::pad_number(self.date.1).as_str(),
-        Self::pad_number(self.date.0).as_str(),
-        ).unwrap();
+            &mut val1,
+            "{}:{}:{}",
+            Self::pad_number(self.date.2).as_str(),
+            Self::pad_number(self.date.1).as_str(),
+            Self::pad_number(self.date.0).as_str(),
+        )
+        .unwrap();
 
         // Format date
         uwrite!(
-        &mut val2,
-        "{}/{}/{}",
-        Self::pad_number(self.date.3).as_str(),
-        Self::pad_number(self.date.4).as_str(),
-        self.date.5
-        ).unwrap();
+            &mut val2,
+            "{}/{}/{}",
+            Self::pad_number(self.date.3).as_str(),
+            Self::pad_number(self.date.4).as_str(),
+            self.date.5
+        )
+        .unwrap();
 
         (val1, val2)
     }
@@ -154,7 +156,8 @@ impl Preferences {
     /// returns the amount of days in the month
     pub fn get_days_in_month(&self) -> u8 {
         match self.date.4 {
-            2 => { // Feb
+            2 => {
+                // Feb
                 if Self::is_leap_year(self.date.5) {
                     29
                 } else {
@@ -162,7 +165,7 @@ impl Preferences {
                 }
             }
             4 | 6 | 9 | 11 => 30, // Apr, Jun, Sep, Nov
-            _ => 31, // Other months
+            _ => 31,              // Other months
         }
     }
 
@@ -196,7 +199,7 @@ impl Preferences {
                 Self::pad_number(watering_time.3).as_str(),
                 Self::pad_number(watering_time.2).as_str(),
             )
-                .unwrap();
+            .unwrap();
         } else {
             uwrite!(str, "None").unwrap();
         }
@@ -237,11 +240,10 @@ pub fn inclusive_iterator(current_val: u8, min_val: u8, max_val: u8, increment: 
         } else {
             current_val + 1
         }
+    } else if current_val == min_val {
+        max_val
     } else {
-        if current_val == min_val {
-            max_val
-        } else {
-            current_val - 1
-        }
+        current_val - 1
     }
+
 }

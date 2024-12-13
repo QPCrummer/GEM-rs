@@ -36,9 +36,7 @@ impl CountDownTimer {
     ///
     /// returns a new instances of CountDownTimer
     pub fn new(target_ms: u16) -> CountDownTimer {
-        Self {
-            target_ms,
-        }
+        Self { target_ms }
     }
 
     /// Updates the CountDownTimer
