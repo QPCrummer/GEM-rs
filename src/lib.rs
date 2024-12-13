@@ -11,6 +11,9 @@
 //! - Uptime tracker
 //! - Watering system scheduler
 //! - Smoke/fire detection support
+//!
+//! Links:
+//! [GitHub](https://github.com/QPCrummer/GEM-rs)
 
 pub mod preferences;
 pub mod rendering;
