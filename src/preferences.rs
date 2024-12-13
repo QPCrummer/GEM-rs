@@ -245,5 +245,4 @@ pub fn inclusive_iterator(current_val: u8, min_val: u8, max_val: u8, increment: 
     } else {
         current_val - 1
     }
-
 }
