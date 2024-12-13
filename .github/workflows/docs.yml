@@ -37,10 +37,12 @@ jobs:
         run: cargo doc
 
       - name: Add redirect
-        run: echo '<meta http-equiv="refresh" content="0;url=greenhouse_rs/index.html">' > target/thumbv6m-none-eabi/doc/greenhouse_rs/index.html
+        run: echo '<meta http-equiv="refresh" content="0;url=greenhouse_rs/index.html">' > target/thumbv6m-none-eabi/doc/index.html
 
-      - name: Remove lock file
-        run: rm target/thumbv6m-none-eabi/doc/.lock
+      - name: Remove lock files
+        run: |
+             rm target/doc/.lock
+             rm target/thumbv6m-none-eabi/doc/.lock
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
