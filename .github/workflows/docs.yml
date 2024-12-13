@@ -37,7 +37,7 @@ jobs:
         run: cargo doc
 
       - name: Add redirect
-        run: echo '<meta http-equiv="refresh" content="0;url=index.html">' > target/thumbv6m-none-eabi/doc/greenhouse_rs/index.html
+        run: echo '<meta http-equiv="refresh" content="0;url=greenhouse-rs/index.html">' > target/thumbv6m-none-eabi/doc/greenhouse_rs/index.html
 
       - name: Remove lock file
         run: rm target/thumbv6m-none-eabi/doc/.lock
