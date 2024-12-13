@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
-name = "greenhouse-rs"
-version = "0.1.0"
+name = "gem-rs"
+version = "1.0.0"
 license = "MIT"
 authors = ["QPCrummer"]
 

@@ -223,7 +223,7 @@ impl Preferences {
 ///
 /// ## Example:
 /// ```rust
-///  use greenhouse_rs::preferences::inclusive_iterator;
+///  use gem_rs::preferences::inclusive_iterator;
 ///
 ///  let mut foo = 0; // Initial value
 ///  foo = inclusive_iterator(

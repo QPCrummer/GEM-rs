@@ -1,5 +1,5 @@
-# GreenhousePi.rs
-
+# GEM.rs
+## Greenhouse Environment Monitor
 A greenhouse monitoring solution written in rust.
 
 <!-- TABLE OF CONTENTS -->
@@ -61,7 +61,7 @@ cargo run --release
 <!-- Features -->
 <details open="open">
   <summary><h2 style="display: inline-block" id="features">Features</h2></summary>
-  The following features are part of the current release of GreenhousePi-rs:
+  The following features are part of the current release of GEM-rs:
 
 - Temperature monitoring and safety range
 - Humidity monitoring and safety range
@@ -77,7 +77,7 @@ cargo run --release
 
 This project is unlikely to be developed further as it was only a proof of concept for a demonstration.
 
-See the [open issues](https://github.com/rp-rs/rp2040-project-template/issues) for a list of
+See the [open issues](https://github.com/QPCrummer/GEM-rs/issues) for a list of
 proposed features (and known issues).
 
 ## License
@@ -90,4 +90,4 @@ under these terms.
 
 ## Contact
 
-Raise an issue: [GitHub Issues](https://github.com/QPCrummer/GreenhousePi-rs/issues)
+Raise an issue: [GitHub Issues](https://github.com/QPCrummer/GEM-rs/issues)

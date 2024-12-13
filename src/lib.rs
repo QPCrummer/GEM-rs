@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! # GreenhousePi-rs
+//! # GEM-rs: Greenhouse Environmental Monitor
 //! ## A greenhouse monitoring system solution in Rust
 //!
 //! Features:

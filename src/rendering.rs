@@ -160,8 +160,8 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut 
 /// ## Example:
 /// ```rust
 /// use rp_pico::hal::Timer;
-/// use greenhouse_rs::preferences::Preferences;
-/// use greenhouse_rs::rendering::{render_time_config_screen, Lcd};
+/// use gem_rs::preferences::Preferences;
+/// use gem_rs::rendering::{render_time_config_screen, Lcd};
 ///
 /// let mut preferences = Preferences::default();
 /// let mut info_str: heapless::String<11>; // Must be a heapless String with size 11

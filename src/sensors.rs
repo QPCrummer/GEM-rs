@@ -54,7 +54,7 @@ pub fn get_temperature(data: &FieldData) -> u8 {
 /// use rp_pico::hal::gpio::bank0::Gpio6;
 /// use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioOutput};
 /// use rp_pico::hal::Timer;
-/// use greenhouse_rs::sensors::{get_bme_data, get_humidity, Bme};
+/// use gem_rs::sensors::{get_bme_data, get_humidity, Bme};
 ///
 ///
 /// let data = FieldData::default(); // This is representing `get_bme_data()`

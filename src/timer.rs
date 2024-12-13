@@ -6,7 +6,7 @@ use panic_probe as _;
 ///
 /// ## Example:
 /// ```rust
-/// use greenhouse_rs::timer::CountDownTimer;
+/// use gem_rs::timer::CountDownTimer;
 ///
 /// let mut countdown = CountDownTimer::new(0); // Creates a new CountDownTimer with 0 milliseconds to wait
 /// countdown.set_time(1000); // Sets the timer to 1000ms

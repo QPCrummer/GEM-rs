@@ -23,13 +23,13 @@ use bsp::hal::{
     pac,
     watchdog::Watchdog,
 };
-use greenhouse_rs::preferences::{inclusive_iterator, Preferences};
-use greenhouse_rs::rendering::{
+use gem_rs::preferences::{inclusive_iterator, Preferences};
+use gem_rs::rendering::{
     render_date_edit_screen, render_edit_screen, render_screen, render_selector,
     render_time_config_screen, render_watering_edit_screen, Lcd,
 };
-use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
-use greenhouse_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
+use gem_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
+use gem_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
 use hd44780_driver::bus::FourBitBusPins;
 use hd44780_driver::memory_map::MemoryMap1602;
 use hd44780_driver::setup::DisplayOptions4Bit;
@@ -169,7 +169,7 @@ fn main() -> ! {
     let mut roof_vent = pins.gpio14.into_push_pull_output();
 
     let mut current_screen_index: u8 = 0;
-    let mut data: FieldData = FieldData::default(); // TODO Make sure this is set to a valid value before using it
+    let mut data: FieldData = FieldData::default();
     let mut preferences: Preferences = Preferences::default();
 
     loop {
