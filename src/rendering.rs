@@ -151,7 +151,7 @@ pub fn render_time_config_screen(
     loop {
         if refresh {
             uwrite!(info_str, "{}: {}", unit, preference)
-                .unwrap(); // Max str size 10
+                .unwrap();
             render_date_edit_screen(info_str, lcd, delay);
             info_str.clear();
             refresh = false;

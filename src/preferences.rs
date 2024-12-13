@@ -103,8 +103,8 @@ impl Preferences {
         uwrite!(
         &mut val2,
         "{}/{}/{}",
-        Self::pad_number(self.date.3 + 1).as_str(),
-        Self::pad_number(self.date.4 + 1).as_str(),
+        Self::pad_number(self.date.3).as_str(),
+        Self::pad_number(self.date.4).as_str(),
         self.date.5
         ).unwrap();
 
@@ -160,10 +160,11 @@ impl Preferences {
     /// returns false if there is no watering time set
     pub fn is_watering_time(&self) -> bool {
         if let Some(watering_time) = self.watering {
-            self.date.1 >= watering_time.0 && // Minutes are not too small
-                self.date.1 <= watering_time.2 && // Minutes are not too large
-                self.date.2 >= watering_time.1 && // Hours are not too small
-                self.date.2 <= watering_time.3 // Hours are not too large
+            let current_minutes: u16 = (self.date.2 * 60 + self.date.1) as u16; // Convert current time to total minutes
+            let start_minutes: u16 = (watering_time.1 * 60 + watering_time.0) as u16; // Convert start time to total minutes
+            let end_minutes: u16 = (watering_time.3 * 60 + watering_time.2) as u16; // Convert end time to total minutes
+
+            current_minutes >= start_minutes && current_minutes <= end_minutes
         } else {
             false
         }

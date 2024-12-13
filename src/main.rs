@@ -36,7 +36,7 @@ use rp_pico::hal::gpio::bank0::{Gpio10, Gpio11, Gpio12};
 use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
-use greenhouse_rs::preferences::Preferences;
+use greenhouse_rs::preferences::{inclusive_iterator, Preferences};
 use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen, render_watering_edit_screen};
 use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 use greenhouse_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
@@ -409,7 +409,7 @@ fn main() -> ! {
                                         break;
                                     }
                                 }
-                                
+
                                 // Validate day
                                 if preferences.date.3 > preferences.get_days_in_month() {
                                     preferences.date.3 = preferences.get_days_in_month();
@@ -450,10 +450,10 @@ fn main() -> ! {
                                                 preferences.set_default_watering_time();
                                             } else if let Some((ref mut min_low, ref mut hr_low, ref mut min_high, ref mut hr_high)) = preferences.watering {
                                                 match index {
-                                                    0 => *hr_low = (*hr_low + 1) % 24,
-                                                    1 => *min_low = (*min_low + 1) % 60,
-                                                    2 => *hr_high = (*hr_high + 1) % 24,
-                                                    3 => *min_high = (*min_high + 1) % 60,
+                                                    0 => *hr_low = inclusive_iterator(*hr_low, 0, 23, true),
+                                                    1 => *min_low = inclusive_iterator(*min_low, 0, 59, true),
+                                                    2 => *hr_high = inclusive_iterator(*hr_high, 0, 23, true),
+                                                    3 => *min_high = inclusive_iterator(*min_high, 0, 59, true),
                                                     _ => {}
                                                 }
                                             }
@@ -464,15 +464,16 @@ fn main() -> ! {
                                                 preferences.set_default_watering_time();
                                             } else if let Some((ref mut min_low, ref mut hr_low, ref mut min_high, ref mut hr_high)) = preferences.watering {
                                                 match index {
-                                                    0 => *hr_low = (*hr_low + 23) % 24,
-                                                    1 => *min_low = (*min_low + 59) % 60,
-                                                    2 => *hr_high = (*hr_high + 23) % 24,
-                                                    3 => *min_high = (*min_high + 59) % 60,
+                                                    0 => *hr_low = inclusive_iterator(*hr_low, 0, 23, false),
+                                                    1 => *min_low = inclusive_iterator(*min_low, 0, 59, false),
+                                                    2 => *hr_high = inclusive_iterator(*hr_high, 0, 23, false),
+                                                    3 => *min_high = inclusive_iterator(*min_high, 0, 59, false),
                                                     _ => {}
                                                 }
                                             }
                                             refresh = true;
                                         } else if select_button.is_high().unwrap() {
+                                            remove = preferences.watering.is_none();
                                             refresh = true;
                                             break;
                                         }
