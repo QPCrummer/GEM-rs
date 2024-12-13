@@ -37,7 +37,7 @@ use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioInput};
 use rp_pico::hal::pio::PIOExt;
 use ufmt::uwrite;
 use greenhouse_rs::preferences::{inclusive_iterator, Preferences};
-use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen, render_watering_edit_screen};
+use greenhouse_rs::rendering::{render_date_edit_screen, render_edit_screen, render_screen, render_selector, render_time_config_screen, render_watering_edit_screen, Lcd};
 use greenhouse_rs::sensors::{get_bme_data, get_humidity, get_pressure, get_temperature};
 use greenhouse_rs::timer::{CountDownTimer, SCREEN_BUTTON_DELAY, SENSOR_DELAY, TICK_TIME_DELAY};
 
@@ -134,7 +134,7 @@ fn main() -> ! {
         &mut delay,
     );
 
-    let mut lcd = match lcd_result {
+    let mut lcd: Lcd = match lcd_result {
         Ok(lcd) => lcd,
         Err(_) => {
             // Handle the error appropriately here
@@ -606,6 +606,13 @@ fn main() -> ! {
     }
 }
 
+/// What type of update is required when refreshing the screen
+///
+/// - **Up**: The Up button was pressed
+/// - **Down**: The Down button was pressed
+/// - **Select**: The Select button was pressed
+/// - **Sensor**: The sensors need to be refreshed
+/// - **None**: Ignore the refresh
 enum RefreshAction {
     Up,
     Down,
@@ -614,14 +621,16 @@ enum RefreshAction {
     None,
 }
 
-/// Whether to update the LCD
-/// param up: Up Button
-/// param down: Down Button
-/// param select: Selection Button
-/// param wait_time: The amount of time between sensor polling
-/// param preferences: Client Preferences
-/// param button_cd: button countdown
-/// param sensor_cd: sensor countdown
+/// Whether to update the [Lcd]
+///
+/// - param up: Up Button
+/// - param down: Down Button
+/// - param select: Selection Button
+/// - param preferences: [Preferences] instance
+/// - param button_cd: button countdown
+/// - param sensor_cd: sensor countdown
+/// - param time_cd: uptime countdown
+///
 /// returns: if the LCD needs an update
 fn should_update(
     up: &mut Pin<Gpio10, FunctionSio<SioInput>, PullDown>,
@@ -638,6 +647,7 @@ fn should_update(
         preferences.tick_time();
         time_cd.set_time(TICK_TIME_DELAY);
     }
+
     button_cd.tick();
     sensor_cd.tick();
 
@@ -666,8 +676,10 @@ fn should_update(
 }
 
 /// Iterates forwards or backwards through Screens
-/// param current_screen_index: The current screen being displayed
-/// param next: Whether to iterate forward; If false, iterate backwards
+///
+/// - param current_screen_index: The current screen being displayed
+/// - param next: Whether to iterate forward; If false, iterate backwards
+///
 /// returns: The next Screen
 fn next_screen(current_screen_index: u8, next: bool) -> u8 {
     (current_screen_index + if next { 1 } else { 4 }) % 5

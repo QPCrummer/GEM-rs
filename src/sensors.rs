@@ -10,16 +10,18 @@ use rp_pico::pac::PIO0;
 
 use panic_probe as _;
 
-type Bme<'a> = Bme680<
+pub type Bme<'a> = Bme680<
     I2C<'a, PIO0, SM0, Pin<Gpio8, FunctionNull, PullDown>, Pin<Gpio9, FunctionNull, PullDown>>,
     Timer,
 >;
 
-/// Gets data from the BME sensor
-/// param bme: BME sensor instance
-/// param delayer: BME sensor delay
-/// param alarm: Buzzer Pin
-/// returns FieldData
+/// Gets [FieldData] from the BME sensor
+///
+/// - param bme: [Bme] sensor instance
+/// - param delayer: BME sensor delay
+/// - param alarm: Buzzer Pin
+///
+/// returns [FieldData]
 pub fn get_bme_data(
     bme: &mut Bme,
     delayer: &mut Timer,
@@ -32,29 +34,53 @@ pub fn get_bme_data(
 }
 
 /// Gets temperature in Fahrenheit
-/// param data: FieldData from get_bme_data()
+///
+/// - param data: [FieldData] from [get_bme_data()]
+///
+/// returns the current temperature in Fahrenheit
 pub fn get_temperature(data: &FieldData) -> u8 {
     (data.temperature_celsius() * (9. / 5.) + 32.) as u8
 }
 
 /// Gets percent humidity (whole number)
-/// param data: FieldData from get_bme_data()
+///
+/// - param data: [FieldData] from [get_bme_data()]
+///
+/// returns the current relative humidity as a percentage (non-decimal)
+///
+/// ## Example:
+/// ```rust
+/// use bme680::FieldData;
+/// use rp_pico::hal::gpio::bank0::Gpio6;
+/// use rp_pico::hal::gpio::{FunctionSio, Pin, PullDown, SioOutput};
+/// use rp_pico::hal::Timer;
+/// use greenhouse_rs::sensors::{get_bme_data, get_humidity, Bme};
+///
+///
+/// let data = FieldData::default(); // This is representing `get_bme_data()`
+/// let humidity = get_humidity(&data); // Ex: let humidity = 50
+/// print!("Humidity: {}%", humidity); // "Humidity: 50%"
+/// ```
 pub fn get_humidity(data: &FieldData) -> u8 {
     data.humidity_percent() as u8
 }
 
 /// Gets atmospheric pressure in millibars
-/// param data: FieldData from get_bme_data()
+///
+/// - param data: [FieldData] from [get_bme_data()]
+///
+/// returns the pressure in millibars/hPa
 pub fn get_pressure(data: &FieldData) -> u16 {
     data.pressure_hpa() as u16
 }
 
-/// Sets the sensor's mode to Forced
-/// This should be called before getting data
-/// If there is an error setting up, an alarm is sounded
-/// param bme: BME sensor reference
-/// param delayer: BME delay
-/// param alarm: Buzzer Pin
+/// Sets the sensor's mode to Forced.
+/// This should be called before getting data.
+/// If there is an error setting up, an alarm is sounded.
+///
+/// - param bme: [Bme] sensor reference
+/// - param delayer: BME delay
+/// - param alarm: Buzzer Pin
 pub fn prep_bme(
     bme: &mut Bme,
     delayer: &mut Timer,

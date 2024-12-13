@@ -13,16 +13,17 @@ use crate::preferences::{inclusive_iterator, Preferences};
 
 use panic_probe as _;
 
-type Lcd =  HD44780<FourBitBus<Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
+pub type Lcd =  HD44780<FourBitBus<Pin<Gpio0, FunctionSio<SioOutput>, PullDown>,
     Pin<Gpio1, FunctionSio<SioOutput>, PullDown>, Pin<Gpio2, FunctionSio<SioOutput>, PullDown>,
     Pin<Gpio3, FunctionSio<SioOutput>, PullDown>, Pin<Gpio4, FunctionSio<SioOutput>, PullDown>,
     Pin<Gpio5, FunctionSio<SioOutput>, PullDown>>, StandardMemoryMap<16, 2>, EmptyFallback<CharsetUniversal>>;
 
-/// Basic function for rendering text onto the LCD
+/// Basic function for rendering text onto the LCD.
 /// It only clears the screen when the top line is written to
-/// param line: text to render
-/// param top_line: if the top line is to be written to
-/// param lcd: LCD instance
+///
+/// - param line: text to render
+/// - param top_line: if the top line is to be written to
+/// - param lcd: [Lcd] instance
 pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd, delay: &mut Timer) {
     // Set cursor to the correct line
     if top_line {
@@ -35,11 +36,12 @@ pub fn render_screen(line: &str, top_line: bool, lcd: &mut Lcd, delay: &mut Time
     lcd.write_str(line, delay).unwrap();
 }
 
-/// Renders the Preferences on screen with an indicator cursor
-/// param line: The preferences line
-/// param left_cursor: If the lower bound is selected
-/// param lcd: LCD instance
-/// param delay: Timer instance
+/// Renders the Preferences on screen with a `^` cursor
+///
+/// - param line: The preferences line
+/// - param left_cursor: If the lower bound is selected
+/// - param lcd: [Lcd] instance
+/// - param delay: [Timer] instance
 pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, lcd: &mut Lcd, delay: &mut Timer) {
     // Clear
     lcd.clear(delay).unwrap();
@@ -57,11 +59,12 @@ pub fn render_edit_screen<const N: usize>(line: &String<N>, left_cursor: bool, l
     }
 }
 
-/// Renders the Preferences watering editing screen with an indicator cursor
-/// param line: The preferences line
-/// param index: If index of the element being edited
-/// param lcd: LCD instance
-/// param delay: Timer instance
+/// Renders the Preferences watering editing screen with a `^` cursor
+///
+/// - param line: The preferences line
+/// - param index: If index of the element being edited
+/// - param lcd: [Lcd] instance
+/// - param delay: Timer instance
 pub fn render_watering_edit_screen<const N: usize>(line: &String<N>, index: i32, lcd: &mut Lcd, delay: &mut Timer) {
     // Clear
     lcd.clear(delay).unwrap();
@@ -90,9 +93,10 @@ pub fn render_watering_edit_screen<const N: usize>(line: &String<N>, index: i32,
     }
 }
 
-/// Renders the current date unit (min, hr, day, etc.) on the first line with a central blinking cursor on the second line
-/// param line: The date line
-/// param lcd: LCD instance
+/// Renders the current date unit `(min, hr, day, etc.)` on the first line with a `^` cursor on the second line
+///
+/// - param line: The date line
+/// - param lcd: [Lcd] instance
 pub fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd, delay: &mut Timer) {
     // Clear
     lcd.clear(delay).unwrap();
@@ -105,10 +109,11 @@ pub fn render_date_edit_screen<const N: usize>(line: &String<N>, lcd: &mut Lcd, 
     render_selector(true, 7, lcd, delay);
 }
 
-/// Renders a ^ on the bottom line at the specified position
-/// param active: whether to add or remove a ^
-/// param bottom_pos: the x-coordinate
-/// param lcd: LCD instance
+/// Renders a `^` on the bottom line at the specified position
+///
+/// - param active: whether to add a `^`
+/// - param bottom_pos: the x-coordinate on the bottom row
+/// - param lcd: [Lcd] instance
 pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut Timer) {
     lcd.set_cursor_xy((bottom_pos, 1), delay).unwrap();
     if active {
@@ -119,18 +124,49 @@ pub fn render_selector(active: bool, bottom_pos: u8, lcd: &mut Lcd, delay: &mut 
 }
 
 /// Renders configuration screens for various parts of the date system
-/// param unit: The current unit; Ex: Minutes
-/// param info_str: String<N> for data
-/// param min: The minimum value for the unit
-/// param max: The maximum value for the unit
-/// param preference: Current variable being assigned
-/// param preferences: Preferences instance
-/// param lcd: LCD instance
-/// param delay: Delay instance
-/// param up_button: Up button instance
-/// param down_button: Down button instance
-/// param select_button: Select button instance
+///
+/// - param unit: The current unit; Ex: Minutes
+/// - param info_str: [String] for data
+/// - param min: The minimum value for the unit
+/// - param max: The maximum value for the unit
+/// - param preference: Current variable being assigned
+/// - param preferences: [Preferences] instance
+/// - param lcd: [Lcd] instance
+/// - param delay: [Timer] instance
+/// - param up_button: Up button instance
+/// - param down_button: Down button instance
+/// - param select_button: Select button instance
+///
 /// returns the inputted preference value after modification
+///
+/// ## Example:
+/// ```rust
+/// use rp_pico::hal::Timer;
+/// use greenhouse_rs::preferences::Preferences;
+/// use greenhouse_rs::rendering::{render_time_config_screen, Lcd};
+///
+/// let mut preferences = Preferences::default();
+/// let mut info_str: heapless::String<11>; // Must be a heapless String with size 11
+/// let mut lcd: Lcd;
+/// let mut delay: Timer;
+/// let mut up_button;     // GPIO
+/// let mut down_button;   // GPIO
+/// let mut select_button; // GPIO
+///
+/// preferences.date.1 = render_time_config_screen( // Set the Minutes to the return value
+///     "Minute",           // Name of the unit is "Minute"
+///     &mut info_str,
+///     0,                  // The minimum minute value is 0
+///     59,                 // The maximum minute value is 59
+///     preferences.date.1, // Pass the minute variable
+///     &mut preferences,
+///     &mut lcd,
+///     &mut delay,
+///     &mut up_button,
+///     &mut down_button,
+///     &mut select_button,
+///  );
+/// ```
 #[allow(clippy::too_many_arguments)]
 pub fn render_time_config_screen(
     unit: &str,
